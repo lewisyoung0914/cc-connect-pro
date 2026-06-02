@@ -3267,24 +3267,20 @@ func progressAgentLabel(agent string) string {
 	return agent
 }
 
+// i18nT returns the localized message for the given MsgKey in the given language.
+// It creates a temporary I18n instance so it works without a persistent engine.
+func i18nT(lang string, key core.MsgKey) string {
+	return core.NewI18n(core.Language(lang)).T(key)
+}
+
 func progressStateMeta(state core.ProgressCardState, lang string, agent string) (title string, template string, footer string) {
-	zh := isZhLikeProgressLang(lang)
 	switch state {
 	case core.ProgressCardStateCompleted:
-		if zh {
-			return fmt.Sprintf("%s · 已完成", agent), "green", "本过程卡片已停止更新，完整答复见下一条消息。"
-		}
-		return fmt.Sprintf("%s · Completed", agent), "green", "This progress card is no longer updating. Full response is in the next message."
+		return fmt.Sprintf("%s · %s", agent, i18nT(lang, core.MsgKeyTemplateProgressDone)), "green", ""
 	case core.ProgressCardStateFailed:
-		if zh {
-			return fmt.Sprintf("%s · 失败", agent), "red", "本过程卡片已停止更新（失败），完整错误说明见下一条消息。"
-		}
-		return fmt.Sprintf("%s · Failed", agent), "red", "This progress card has stopped (failed). See the next message for details."
+		return fmt.Sprintf("%s · %s", agent, i18nT(lang, core.MsgKeyTemplateErrorTitle)), "red", ""
 	default:
-		if zh {
-			return fmt.Sprintf("%s · 进行中", agent), "blue", ""
-		}
-		return fmt.Sprintf("%s · Running", agent), "blue", ""
+		return fmt.Sprintf("%s · %s", agent, i18nT(lang, core.MsgKeyTemplateProgressTitle)), "orange", ""
 	}
 }
 
@@ -3498,6 +3494,17 @@ func progressResultDot(item core.ProgressCardEntry) string {
 	return "⚪"
 }
 
+// stepIcon returns the status icon for a progress card entry.
+func stepIcon(item core.ProgressCardEntry) string {
+	if item.Kind == core.ProgressEntryToolResult {
+		if item.Success != nil && !*item.Success {
+			return "✗"
+		}
+		return "✓"
+	}
+	return "⏳"
+}
+
 func renderProgressEntryElement(item core.ProgressCardEntry, lang string) map[string]any {
 	text := strings.TrimSpace(item.Text)
 	if text == "" {
@@ -3519,7 +3526,8 @@ func renderProgressEntryElement(item core.ProgressCardEntry, lang string) map[st
 		if toolName == "" {
 			toolName = "Tool"
 		}
-		content := fmt.Sprintf("<text_tag color='blue'>%s</text_tag> `%s`", progressKindLabel(item.Kind, lang), inlineCodeText(toolName))
+		icon := stepIcon(item)
+		content := fmt.Sprintf("%s <text_tag color='blue'>%s</text_tag> **%s**", icon, progressKindLabel(item.Kind, lang), inlineCodeText(toolName))
 		if body := formatProgressToolInput(toolName, text); body != "" {
 			content += "\n" + body
 		}
@@ -3529,9 +3537,10 @@ func renderProgressEntryElement(item core.ProgressCardEntry, lang string) map[st
 		}
 	case core.ProgressEntryToolResult:
 		toolName := strings.TrimSpace(item.Tool)
-		content := fmt.Sprintf("<text_tag color='turquoise'>%s</text_tag>", progressKindLabel(item.Kind, lang))
+		icon := stepIcon(item)
+		content := fmt.Sprintf("%s <text_tag color='turquoise'>%s</text_tag>", icon, progressKindLabel(item.Kind, lang))
 		if toolName != "" {
-			content += " `" + inlineCodeText(toolName) + "`"
+			content += " **" + inlineCodeText(toolName) + "**"
 		}
 		dot := progressResultDot(item)
 		meta := dot
