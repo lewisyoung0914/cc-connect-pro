@@ -126,6 +126,16 @@ func (p *stubCronReplyTargetPlatform) ResolveCronReplyTarget(sessionKey string, 
 	return "discord:thread-fresh", "fresh-rctx", nil
 }
 
+// multiTagStubPlatform overrides Tag() to return an independent tag value,
+// allowing tests to simulate multi-instance routing where two platforms share
+// the same Name() but carry distinct Tag() values.
+type multiTagStubPlatform struct {
+	stubPlatformEngine
+	tagValue string
+}
+
+func (p *multiTagStubPlatform) Tag() string { return p.tagValue }
+
 type resultAgent struct {
 	session AgentSession
 }
@@ -11359,6 +11369,58 @@ func TestExtractSessionKeyParts(t *testing.T) {
 				t.Errorf("extractUserID(%q) = %q, want %q", tt.sessionKey, gotUser, tt.wantUser)
 			}
 		})
+	}
+}
+
+func TestEngineRoutingByTag(t *testing.T) {
+	// Two platforms with same Name ("feishu") but different Tags
+	p1 := &multiTagStubPlatform{stubPlatformEngine: stubPlatformEngine{n: "feishu"}, tagValue: "feishu-teamA"}
+	p2 := &multiTagStubPlatform{stubPlatformEngine: stubPlatformEngine{n: "feishu"}, tagValue: "feishu-teamB"}
+
+	// Verify Tag-based routing via extractPlatformTag
+	tag1 := extractPlatformTag("feishu-teamA:oc_chat1:ou_user1")
+	if tag1 != "feishu-teamA" {
+		t.Errorf("extractPlatformTag(\"feishu-teamA:oc_chat1:ou_user1\") = %q, want \"feishu-teamA\"", tag1)
+	}
+
+	tag2 := extractPlatformTag("feishu-teamB:oc_chat2:ou_user2")
+	if tag2 != "feishu-teamB" {
+		t.Errorf("extractPlatformTag(\"feishu-teamB:oc_chat2:ou_user2\") = %q, want \"feishu-teamB\"", tag2)
+	}
+
+	// Verify Name-based matching is ambiguous (both return "feishu")
+	matchedByName := 0
+	for _, p := range []Platform{p1, p2} {
+		if p.Name() == "feishu" {
+			matchedByName++
+		}
+	}
+	if matchedByName != 2 {
+		t.Errorf("Name() matched %d platforms, want 2 — Name is not sufficient for routing", matchedByName)
+	}
+
+	// Verify Tag-based matching finds the correct one
+	foundA := false
+	foundB := false
+	for _, p := range []Platform{p1, p2} {
+		if p.Tag() == "feishu-teamA" {
+			foundA = true
+			if p.Name() != "feishu" {
+				t.Errorf("Tag \"feishu-teamA\" platform has Name %q, want \"feishu\"", p.Name())
+			}
+		}
+		if p.Tag() == "feishu-teamB" {
+			foundB = true
+			if p.Name() != "feishu" {
+				t.Errorf("Tag \"feishu-teamB\" platform has Name %q, want \"feishu\"", p.Name())
+			}
+		}
+	}
+	if !foundA {
+		t.Error("no platform found with Tag \"feishu-teamA\"")
+	}
+	if !foundB {
+		t.Error("no platform found with Tag \"feishu-teamB\"")
 	}
 }
 
