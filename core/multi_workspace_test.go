@@ -31,6 +31,7 @@ func (m *mockChannelResolver) Name() string {
 	}
 	return "mock"
 }
+func (m *mockChannelResolver) Tag() string                                    { return m.Name() }
 func (m *mockChannelResolver) Start(MessageHandler) error                     { return nil }
 func (m *mockChannelResolver) Reply(_ context.Context, _ any, _ string) error { return nil }
 func (m *mockChannelResolver) Send(_ context.Context, _ any, _ string) error  { return nil }

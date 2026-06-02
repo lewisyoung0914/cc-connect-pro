@@ -183,7 +183,7 @@ MiniMax-M2.7 is a next-generation large language model designed for autonomous e
 - **Global Provider Management** — Add/edit/delete providers in the web UI; import from cc-switch config.
 - **Personal WeChat** — Chat with your local agent from **Weixin (personal)** via ilink long-polling; QR `weixin setup`, CDN media, no public IP. *[Setup → `docs/weixin.md`](docs/weixin.md)*
 - **Weibo DM** — Chat with your agent via **Weibo private messages** over WebSocket; no public IP needed, text streaming supported.
-- **Feishu Enhancements** — Auto-resolve `@name` mentions, multi-level reply chain recognition, done-emoji reactions.
+- **Feishu Enhancements** — Auto-resolve `@name` mentions, multi-level reply chain recognition, done-emoji reactions. New `thread_isolation` for P2P concurrent multi-task: each new message starts an independent thread, replying to bot continues the same task, multiple threads run concurrently without blocking.
 - **New Agents** — Kimi CLI and Pi agent support added.
 
 
@@ -408,6 +408,17 @@ reset_on_idle_mins = 30   # default when unset; set to 0 to disable
 ```
 
 The default is **30 minutes** when unset. Set `reset_on_idle_mins = 0` to opt out and always continue the previous session.
+
+Feishu P2P chats can enable thread-level concurrency — each new message starts an independent task thread, replying to the bot continues the same task, multiple threads run concurrently without blocking:
+
+```toml
+[[projects.platforms]]
+type = "feishu"
+[projects.platforms.options]
+app_id = "cli_xxx"
+app_secret = "xxx"
+thread_isolation = true   # Enables P2P thread concurrency (group thread isolation also works)
+```
 
 ### 🛡️ OS-User Isolation (`run_as_user`)
 

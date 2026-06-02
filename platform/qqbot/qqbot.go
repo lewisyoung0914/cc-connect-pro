@@ -183,6 +183,7 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func (p *Platform) Name() string { return "qqbot" }
+func (p *Platform) Tag() string { return p.Name() }
 
 // Start connects to the QQ Bot gateway and begins receiving events.
 func (p *Platform) Start(handler core.MessageHandler) error {

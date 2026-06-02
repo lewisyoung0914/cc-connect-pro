@@ -109,6 +109,7 @@ type replyContext struct {
 	messageID  string
 	chatID     string
 	sessionKey string
+	chatType   string // "group" or "p2p"
 }
 
 type Platform struct {
@@ -304,6 +305,7 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 }
 
 func (p *Platform) Name() string { return p.platformName }
+func (p *Platform) Tag() string { return p.platformName }
 
 func (p *Platform) ProgressStyle() string { return p.progressStyle }
 
@@ -663,7 +665,7 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 			return nil, nil
 		}
 
-		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
+		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey, chatType: chatTypeFromID(chatID)}
 		h := p.getHandler()
 		go h(p.dispatchPlatform(), &core.Message{
 			SessionKey: sessionKey,
@@ -695,7 +697,7 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 
 	// askq: — AskUserQuestion option selected, forward as user message
 	if strings.HasPrefix(actionVal, "askq:") {
-		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
+		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey, chatType: chatTypeFromID(chatID)}
 		h := p.getHandler()
 		go h(p.dispatchPlatform(), &core.Message{
 			SessionKey: sessionKey,
@@ -728,7 +730,7 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 	// cmd: — async command dispatch
 	if strings.HasPrefix(actionVal, "cmd:") {
 		cmdText := strings.TrimPrefix(actionVal, "cmd:")
-		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
+		rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey, chatType: chatTypeFromID(chatID)}
 
 		slog.Info(p.tag()+": card action dispatched as command", "cmd", cmdText, "user", userID)
 
@@ -985,7 +987,7 @@ func (p *Platform) onMessageRecalled(_ context.Context, event *larkim.P2MessageR
 		Platform:  p.platformName,
 		MessageID: messageID,
 		Recalled:  true,
-		ReplyCtx:  replyContext{messageID: messageID, chatID: chatID},
+		ReplyCtx:  replyContext{messageID: messageID, chatID: chatID, chatType: chatTypeFromID(chatID)},
 	})
 	return nil
 }
@@ -1052,6 +1054,9 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 	// Pre-compute sessionKey so the @bot filter below can consult the active
 	// thread set; sessionKey is also used downstream for dispatch.
 	sessionKey := p.makeSessionKey(msg, chatID, userID)
+	slog.Info(p.tag()+": session key derived",
+		"session_key", sessionKey, "chat_type", chatType,
+		"thread_isolation", p.threadIsolation, "chat_id", chatID, "user_id", userID)
 
 	if chatType == "group" && !p.groupReplyAll && p.getBotOpenID() != "" {
 		if !isBotMentioned(msg.Mentions, p.getBotOpenID()) {
@@ -1101,7 +1106,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 	mentions := msg.Mentions
 	parentID := stringValue(msg.ParentId)
 
-	rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
+	rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey, chatType: chatType}
 	slog.Debug(p.tag()+": routed inbound message",
 		"message_id", messageID,
 		"session_key", sessionKey,
@@ -2928,16 +2933,31 @@ func stripMentions(text string, mentions []*larkim.MentionEvent, botOpenID strin
 	return strings.TrimSpace(text)
 }
 
+// chatTypeFromID infers "group" or "p2p" from the chatID prefix.
+// Feishu group chats use "oc_" prefix; P2P chats use "ou_" prefix.
+func chatTypeFromID(chatID string) string {
+	if strings.HasPrefix(chatID, "oc_") {
+		return "group"
+	}
+	return "p2p"
+}
+
 // TODO: Session-key derivation and reply-thread behavior are split across multiple code paths here.
 // Should revisit thread/root handling without changing thread_isolation=false behavior.
 func (p *Platform) makeSessionKey(msg *larkim.EventMessage, chatID, userID string) string {
-	if p.threadIsolation && msg != nil && stringValue(msg.ChatType) == "group" {
-		rootID := stringValue(msg.RootId)
-		if rootID == "" {
-			rootID = stringValue(msg.MessageId)
+	if p.threadIsolation && msg != nil {
+		chatType := stringValue(msg.ChatType)
+		if chatType == "" {
+			chatType = chatTypeFromID(chatID) // 从 chatID 前缀推断回退
 		}
-		if rootID != "" {
-			return fmt.Sprintf("%s:%s:root:%s", p.tag(), chatID, rootID)
+		if chatType == "group" || chatType == "p2p" || chatType == "direct" || chatType == "single" {
+			rootID := stringValue(msg.RootId)
+			if rootID == "" {
+				rootID = stringValue(msg.MessageId)
+			}
+			if rootID != "" {
+				return fmt.Sprintf("%s:%s:root:%s", p.tag(), chatID, rootID)
+			}
 		}
 	}
 	if p.shareSessionInChannel {
@@ -2959,10 +2979,12 @@ func (p *Platform) sessionKeyFromCardAction(chatID, userID string, value map[str
 }
 
 func (p *Platform) shouldReplyInThread(rc replyContext) bool {
-	if rc.messageID == "" {
+	if rc.messageID == "" || !p.threadIsolation || !isThreadSessionKey(rc.sessionKey) {
 		return false
 	}
-	return p.threadIsolation && isThreadSessionKey(rc.sessionKey)
+	// ReplyInThread 仅适用于群聊线程。
+	// 私聊线程中使用普通回复 API 形成可视回复链。
+	return rc.chatType == "group"
 }
 
 // shouldUseThreadOrReplyAPI is true when we should call Im.Message.Reply (optionally with ReplyInThread).
@@ -3190,7 +3212,7 @@ func (p *Platform) ReconstructReplyCtx(sessionKey string) (any, error) {
 	if len(parts) < 2 || parts[0] != p.platformName {
 		return nil, fmt.Errorf("%s: invalid session key %q", p.tag(), sessionKey)
 	}
-	rc := replyContext{chatID: parts[1], sessionKey: sessionKey}
+	rc := replyContext{chatID: parts[1], sessionKey: sessionKey, chatType: chatTypeFromID(parts[1])}
 	if len(parts) == 3 {
 		if rootID, ok := parseThreadRootID(parts[2]); ok {
 			rc.messageID = rootID
@@ -4024,7 +4046,7 @@ func (p *Platform) onBotMenu(event *larkapplication.P2BotMenuV6) error {
 		Content:    content,
 		UserID:     userID,
 		UserName:   userName,
-		ReplyCtx:   replyContext{chatID: userID, sessionKey: sessionKey},
+		ReplyCtx:   replyContext{chatID: userID, sessionKey: sessionKey, chatType: chatTypeFromID(userID)},
 	})
 	return nil
 }

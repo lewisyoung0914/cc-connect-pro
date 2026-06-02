@@ -63,6 +63,7 @@ func New(name string) *MockPlatform {
 // ── core.Platform interface ──────────────────────────────────────────────────
 
 func (p *MockPlatform) Name() string { return p.name }
+func (p *MockPlatform) Tag() string  { return p.Name() }
 
 func (p *MockPlatform) Start(handler core.MessageHandler) error {
 	p.handler = handler

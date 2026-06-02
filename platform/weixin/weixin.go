@@ -205,6 +205,7 @@ func pickInt(v any) int {
 }
 
 func (p *Platform) Name() string { return "weixin" }
+func (p *Platform) Tag() string { return p.Name() }
 
 func (p *Platform) loadSyncBuf() {
 	if p.syncBufPath == "" {

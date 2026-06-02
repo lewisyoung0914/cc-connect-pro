@@ -1168,3 +1168,215 @@ func TestNewPlatform_RequireMentionTrueDoesNotForceGroupReplyAll(t *testing.T) {
 		t.Error("require_mention=true should leave groupReplyAll=false, but it is true")
 	}
 }
+
+func TestMakeSessionKey_P2PThreadIsolation(t *testing.T) {
+	p := &Platform{
+		platformName:    "feishu",
+		threadIsolation: true,
+	}
+
+	tests := []struct {
+		name      string
+		chatType  string
+		rootID    string
+		messageID string
+		chatID    string
+		userID    string
+		want      string
+	}{
+		{
+			name:      "p2p new message creates thread session",
+			chatType:  "p2p",
+			rootID:    "",
+			messageID: "om_msg1",
+			chatID:    "ou_chat",
+			userID:    "ou_user",
+			want:      "feishu:ou_chat:root:om_msg1",
+		},
+		{
+			name:      "p2p reply message routes to existing thread",
+			chatType:  "p2p",
+			rootID:    "om_parent",
+			messageID: "om_reply",
+			chatID:    "ou_chat",
+			userID:    "ou_user",
+			want:      "feishu:ou_chat:root:om_parent",
+		},
+		{
+			name:      "group thread isolation unchanged",
+			chatType:  "group",
+			rootID:    "om_root",
+			messageID: "om_reply",
+			chatID:    "oc_group",
+			userID:    "ou_user",
+			want:      "feishu:oc_group:root:om_root",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &larkim.EventMessage{
+				ChatType:  &tt.chatType,
+				RootId:    &tt.rootID,
+				MessageId: &tt.messageID,
+			}
+			got := p.makeSessionKey(msg, tt.chatID, tt.userID)
+			if got != tt.want {
+				t.Errorf("makeSessionKey() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMakeSessionKey_P2PNoThreadIsolation(t *testing.T) {
+	p := &Platform{
+		platformName:    "feishu",
+		threadIsolation: false,
+	}
+
+	chatType := "p2p"
+	rootID := "om_parent"
+	messageID := "om_msg1"
+	msg := &larkim.EventMessage{
+		ChatType:  &chatType,
+		RootId:    &rootID,
+		MessageId: &messageID,
+	}
+
+	got := p.makeSessionKey(msg, "ou_chat", "ou_user")
+	want := "feishu:ou_chat:ou_user" // default per-user key when thread_isolation is off
+	if got != want {
+		t.Errorf("makeSessionKey() = %q, want %q", got, want)
+	}
+}
+
+func TestMakeSessionKey_ShareSessionOverridesP2P(t *testing.T) {
+	p := &Platform{
+		platformName:          "feishu",
+		threadIsolation:       false,
+		shareSessionInChannel: true,
+	}
+
+	chatType := "p2p"
+	msg := &larkim.EventMessage{
+		ChatType: &chatType,
+	}
+
+	got := p.makeSessionKey(msg, "ou_chat", "ou_user")
+	want := "feishu:ou_chat" // shareSessionInChannel drops userID
+	if got != want {
+		t.Errorf("makeSessionKey() = %q, want %q", got, want)
+	}
+}
+
+func TestMakeSessionKey_ThreadIsolationOverridesShareSessionInP2P(t *testing.T) {
+	// When both threadIsolation and shareSessionInChannel are true,
+	// threadIsolation takes precedence in P2P (checked first in makeSessionKey).
+	p := &Platform{
+		platformName:          "feishu",
+		threadIsolation:       true,
+		shareSessionInChannel: true,
+	}
+
+	chatType := "p2p"
+	rootID := ""
+	messageID := "om_msg1"
+	msg := &larkim.EventMessage{
+		ChatType:  &chatType,
+		RootId:    &rootID,
+		MessageId: &messageID,
+	}
+
+	got := p.makeSessionKey(msg, "ou_chat", "ou_user")
+	want := "feishu:ou_chat:root:om_msg1" // thread isolation wins
+	if got != want {
+		t.Errorf("makeSessionKey() = %q, want %q", got, want)
+	}
+}
+
+func TestShouldReplyInThread_P2PReturnsFalse(t *testing.T) {
+	p := &Platform{
+		threadIsolation: true,
+	}
+
+	// P2P thread session should NOT use ReplyInThread=true
+	rc := replyContext{
+		messageID:  "om_msg1",
+		chatID:     "ou_chat",
+		sessionKey: "feishu:ou_chat:root:om_msg1",
+		chatType:   "p2p",
+	}
+	if p.shouldReplyInThread(rc) {
+		t.Error("shouldReplyInThread() = true for P2P, want false")
+	}
+}
+
+func TestShouldReplyInThread_GroupReturnsTrue(t *testing.T) {
+	p := &Platform{
+		threadIsolation: true,
+	}
+
+	// Group thread session SHOULD use ReplyInThread=true
+	rc := replyContext{
+		messageID:  "om_msg1",
+		chatID:     "oc_group",
+		sessionKey: "feishu:oc_group:root:om_msg1",
+		chatType:   "group",
+	}
+	if !p.shouldReplyInThread(rc) {
+		t.Error("shouldReplyInThread() = false for group thread, want true")
+	}
+}
+
+func TestShouldReplyInThread_NonThreadSessionReturnsFalse(t *testing.T) {
+	p := &Platform{
+		threadIsolation: true,
+	}
+
+	// Non-thread session key returns false regardless of chatType
+	rc := replyContext{
+		messageID:  "om_msg1",
+		chatID:     "ou_chat",
+		sessionKey: "feishu:ou_chat:ou_user",
+		chatType:   "p2p",
+	}
+	if p.shouldReplyInThread(rc) {
+		t.Error("shouldReplyInThread() = true for non-thread session, want false")
+	}
+}
+
+func TestShouldReplyInThread_EmptyMessageIDReturnsFalse(t *testing.T) {
+	p := &Platform{
+		threadIsolation: true,
+	}
+
+	rc := replyContext{
+		messageID:  "",
+		chatID:     "ou_chat",
+		sessionKey: "feishu:ou_chat:root:om_msg1",
+		chatType:   "p2p",
+	}
+	if p.shouldReplyInThread(rc) {
+		t.Error("shouldReplyInThread() = true with empty messageID, want false")
+	}
+}
+
+func TestChatTypeFromID(t *testing.T) {
+	tests := []struct {
+		chatID string
+		want   string
+	}{
+		{"oc_group123", "group"},
+		{"ou_user456", "p2p"},
+		{"unknown_prefix", "p2p"}, // default to p2p for unknown prefixes
+		{"", "p2p"},               // empty chatID defaults to p2p
+	}
+	for _, tt := range tests {
+		t.Run(tt.chatID, func(t *testing.T) {
+			got := chatTypeFromID(tt.chatID)
+			if got != tt.want {
+				t.Errorf("chatTypeFromID(%q) = %q, want %q", tt.chatID, got, tt.want)
+			}
+		})
+	}
+}

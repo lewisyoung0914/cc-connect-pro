@@ -77,6 +77,7 @@ type mockMessage struct {
 }
 
 func (m *mockPlatform) Name() string                          { return "mock" }
+func (m *mockPlatform) Tag() string                           { return m.Name() }
 func (m *mockPlatform) Start(h core.MessageHandler) error    { return nil }
 func (m *mockPlatform) Stop() error                           { return nil }
 func (m *mockPlatform) Send(ctx context.Context, replyCtx any, content string) error {

@@ -1,164 +1,9 @@
-<p align="center">
-  <img src="./docs/images/banner.svg" alt="CC-Connect Banner" width="800"/>
-</p>
-
-<p align="center">
-  <a href="https://github.com/chenhg5/cc-connect/actions/workflows/ci.yml">
-    <img src="https://github.com/chenhg5/cc-connect/actions/workflows/ci.yml/badge.svg" alt="CI Status"/>
-  </a>
-  <a href="https://github.com/chenhg5/cc-connect/releases">
-    <img src="https://img.shields.io/github/v/release/chenhg5/cc-connect?include_prereleases" alt="Release"/>
-  </a>
-  <a href="https://www.npmjs.com/package/cc-connect">
-    <img src="https://img.shields.io/npm/dm/cc-connect?logo=npm" alt="npm downloads"/>
-  </a>
-  <a href="https://github.com/chenhg5/cc-connect/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
-  </a>
-  <a href="https://goreportcard.com/report/github.com/chenhg5/cc-connect">
-    <img src="https://goreportcard.com/badge/github.com/chenhg5/cc-connect" alt="Go Report Card"/>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://discord.gg/kHpwgaM4kq">
-    <img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"/>
-  </a>
-  <a href="https://t.me/+odGNDhCjbjdmMmZl">
-    <img src="https://img.shields.io/badge/Telegram-Group-26A5E4?logo=telegram&logoColor=white" alt="Telegram"/>
-  </a>
-</p>
 
 <p align="center">
   <a href="./README.md">English</a> | <a href="./README.zh-CN.md">中文</a>
 </p>
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/23266" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/23266" alt="chenhg5/cc-connect | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-</p>
-
-
-## ❤️ 赞助
-
-> 想在这里展示？联系：chg80333@gmail.com | 微信：mongorz
-
-<details open>
-<summary>赞助商</summary>
-
-[![MiniMax](assets/banners/minimax-zh.jpeg)](https://platform.minimaxi.com/subscribe/token-plan?code=HAvthxk1tT&source=link)
-
-MiniMax M2.7 是 MiniMax 首个深度参与自我迭代的模型，可自主构建复杂 Agent Harness，并基于 Agent Teams、复杂 Skills、Tool Search Tool 等能力完成高复杂度生产力任务；其在软件工程、端到端项目交付及办公场景中表现优异，多项评测接近行业领先水平，同时具备稳定的复杂任务执行、环境交互能力以及良好的情商与身份保持能力。
-
-[点击此处](https://platform.minimaxi.com/subscribe/token-plan?code=HAvthxk1tT&source=link)享 MiniMax Token Plan 专属 88 折优惠 + cc-connect 用户专属代金券！
-
 ---
-
-<table>
-<tr>
-<td width="150"><a href="https://aigocode.com/invite/CYY3C85C"><img src="assets/sponsors/aigocode.png" alt="AIGoCode" width="120"></a></td>
-<td>感谢 AIGoCode 对本项目的赞助！AIGoCode 是集 Claude Code、Codex、最新 Gemini 模型于一体的一站式平台，提供稳定高效、高性价比的 AI 编码服务。灵活订阅方案、零封号风险、无需 VPN 直连、响应速度极快。通过 <a href="https://aigocode.com/invite/CYY3C85C">此链接</a> 注册，首充额外获得 10% 赠送额度！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://aihubmix.com/?aff=mGTx"><img src="assets/sponsors/aihubmix.png" alt="AIHubMix" width="120"></a> <b>AIHubMix</b></td>
-<td>感谢 AIHubMix 赞助本项目！500+ 模型一站式覆盖（Claude/GPT/Gemini/Qwen/DeepSeek/通义等），无限并发，谷歌云集群稳定运行。一个 API Key 驱动全部 Agent，支持 OpenAI/Anthropic/Gemini 三种原生格式，代码零改动迁移。按量计费对齐原厂，含免费模型。通过 <a href="https://aihubmix.com/?aff=mGTx">此链接</a> 注册。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://www.dmxapi.cn/register?aff=NDln"><img src="assets/sponsors/dmx-zh.jpeg" alt="DMXAPI" width="120"></a></td>
-<td>感谢 DMXAPI（大模型API）赞助本项目！DMXAPI，一个 Key 用全球大模型。为 200+ 企业用户提供全球大模型 API 服务。充值即开票、当天开票、并发不限制、1元起充、7x24 在线技术辅导。GPT/Claude/Gemini 全部 6.8 折，国内模型 5~8 折，Claude Code 专属模型 3.4 折进行中！<a href="https://www.dmxapi.cn/register?aff=NDln">点击这里注册</a></td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://apikey.fun/register?aff=cc_connect"><img src="assets/sponsors/apikeyfun.png" alt="APIKEY.FUN" width="120"></a></td>
-<td>感谢 APIKEY.FUN 赞助本项目！APIKEY.FUN 是一家专业的企业级 AI 中转站，致力于为企业和个人开发者提供稳定、高效、低成本的 AI 模型 API 接入服务。平台支持 Claude、OpenAI、Gemini 等主流热门模型，价格低至官方原价的 7%。通过<a href="https://apikey.fun/register?aff=cc_connect">此链接</a>注册，还可享受最高充值永久 95 折专属优惠！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://nekocode.ai/?aff=CC-CONNECT"><img src="assets/sponsors/nekocode.jpg" alt="NekoCode" width="120"></a></td>
-<td>感谢 NekoCode 赞助本项目！NekoCode 提供 Claude 和 CodeX 的可靠稳定高效的 API 中转站，价格透明。NekoCode 为 CC-CONNECT 用户专属 9 折福利码：CC-CONNECT，为开发者提供高性价比稳定的 AI 模型接入服务。通过 <a href="https://nekocode.ai/?aff=CC-CONNECT">此链接</a> 注册。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://www.shengsuanyun.com/?from=CH_67XCLZGS"><img src="assets/sponsors/shengsuanyun.svg" alt="胜算云" width="120"></a></td>
-<td>感谢胜算云赞助了本项目！胜算云是专为 AI Native Teams 服务的超级工厂，工业级 AI 任务并行执行平台，模型商城集采直供聚合接入了 Claude、Chatgpt、Gemini 等海内外 LLM 及图片视频多媒体模型算力，绝无逆向掺水、全站模型 SLA 可用性高达 99.7%、<a href="https://watch.shengsuanyun.com/status/shengsuanyun">监测接口</a>日常全绿。更有企业级专属定制网关，实现团队精细化成本与权限管控，智能路由+安全防护+BYOK 企业自带密钥托管。平台按量及 tokens plan（即将上线）计费，可开票，使用<a href="https://www.shengsuanyun.com/?from=CH_67XCLZGS">此链接</a>注册新用户可获 10 元模力及首充 10% 赠送。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://www.aicodemirror.com/register?invitecode=KDHMUP"><img src="assets/sponsors/aicodemirror.jpg" alt="AICodeMirror" width="120"></a></td>
-<td>感谢 AICodeMirror 对本项目的赞助！AICodeMirror 提供 Claude Code / Codex / Gemini CLI 官方高稳定性中转服务，企业级并发、快速开票、24小时专属技术支持。Claude Code / Codex / Gemini 官方渠道价格仅为原价的 38% / 2% / 9%，充值还有额外折扣！AICodeMirror 为 CC 用户专属福利：通过 <a href="https://www.aicodemirror.com/register?invitecode=KDHMUP">此链接</a> 注册首充享受 20% 折扣，企业客户最高可享 25% 折扣！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://camel.kr777.top/register?aff=V2z8"><img src="assets/sponsors/camel_logo.png" alt="CaMeL" width="120"></a></td>
-<td>感谢 CaMeL 对本项目的赞助！携手各大科研院所、超算中心深度合作，自研高稳高效缓存调度方案。CC-Connect专享新人注册认证即送$10！通过 <a href="https://camel.kr777.top/register?aff=V2z8">此链接</a> 注册。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://cc.anyroute.io/register?aff=CR455DSQSKEV"><img src="assets/sponsors/anyrouteio.png" alt="AnyRoute.io" width="120"></a></td>
-<td>感谢 AnyRoute.io 对本项目的赞助！AnyRoute.io 是集 Claude Code、Codex 最新模型于一体、可靠稳定高效的 API 中转站，价格透明，最低低至官方 0.7 折，支持开票和企业高并发。通过 <a href="https://cc.anyroute.io/register?aff=CR455DSQSKEV">此链接</a> 注册即可开始使用。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://aicanapi.com/register?aff=rIEy"><img src="assets/sponsors/aican.jpg" alt="aicanapi.com" width="120"></a></td>
-<td>感谢 aicanapi.com 对本项目的赞助！艾可API致力于为企业与开发者提供高性能、低延迟、可高并发承载的API接口服务。Claude Code 模型最低可达 1.6 折，其余模型普遍可享官方 2 折优惠，豆包 Seedance 2 真人生成服务支持免排队调用。选择艾可API，让企业级AI接口服务更简单、更高效、更具性价比。通过 <a href="https://aicanapi.com/register?aff=rIEy">此链接</a> 注册即可开始使用。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://pateway.ai/?ch=2qn568&aff=DRA4VUFS"><img src="assets/sponsors/patewayai.png" alt="Pateway" width="120"></a></td>
-<td>感谢 Pateway 对本项目的赞助！PatewayAI 是面向重度 AI 开发者、专注官方直连的高品质模型 API 中转服务商。提供 Claude 全系列与 Codex 系列模型，100% 官方源直供，不掺假不注水。计费透明，Token 级账单可逐笔核验。支持企业级高并发，可签订正式合同并开具发票。通过 <a href="https://pateway.ai/?ch=2qn568&aff=DRA4VUFS">此链接</a> 注册即送 $3 试用额度，充值低至 6 折，邀请好友双向赠送，邀请奖励可达 $150！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://cy.10dianai.com/register?aff=3FQn"><img src="assets/sponsors/10dianai.png" alt="10点AI" width="120"></a></td>
-<td>感谢 10点AI 对本项目的赞助！10dian-AI企业台是面向开发者与企业的 AI API 中转平台，聚合 GPT、Claude、Gemini、DeepSeek 等主流模型。针对生产环境专项优化，支持高并发稳定运行，有效规避接口抖动与超时问题。价格亲民性价比高、接口稳定不掉线、官方保真不参水。通过 <a href="https://cy.10dianai.com/register?aff=3FQn">此链接</a> 注册即送 ¥5 余额！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://cloud.siliconflow.cn/i/650Yh2Z7"><img src="assets/sponsors/siliconflow.png" alt="SiliconFlow" width="120"></a></td>
-<td>感谢 SiliconFlow 对本项目的支持！SiliconFlow 是高性能 AI 基础设施和模型 API 平台，提供语言、语音、图片、视频等多种模型的快速可靠访问。按量计费，多模态模型支持，高速推理，企业级稳定性，帮助开发者和团队更高效地构建和扩展 AI 应用。通过 <a href="https://cloud.siliconflow.cn/i/650Yh2Z7">此链接</a> 注册并完成实名认证，即可获得 ¥20  bonus credits！</td>
-</tr>
-
-
-<tr>
-<td width="150"><a href="https://passport.compshare.cn/register?referral_code=H65IOClRGu5CM7nn5ykfad&ytag=GPU_YY_YX_git_cc-connect"><img src="assets/sponsors/youyunzhisuan.png" alt="优云智算" width="120"></a></td>
-<td>感谢优云智算赞助了本项目！优云智算是UCloud旗下AI云平台，提供稳定、全面的国内外模型API，仅一个key即可调用。主打包月、按次的高性价比国模Coding Plan套餐，同时提供官转稳定海外模型。支持接入 Claude Code、Codex 及 API 调用。支持企业高并发、7*24技术支持、自助开票。通过 <a href="https://passport.compshare.cn/register?referral_code=H65IOClRGu5CM7nn5ykfad&ytag=GPU_YY_YX_git_cc-connect">此链接</a> 注册的用户，可得免费5元平台体验金！</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://dragoncode.codes/register?ref=23ZELCPX"><img src="assets/sponsors/dragoncode.png" alt="DragonCode" width="120"></a></td>
-<td>感谢 DragonCode 对本项目的支持。DragonCode 为 cc-connect 用户准备了专属福利：通过 <a href="https://dragoncode.codes/register?ref=23ZELCPX">此链接</a> 注册即可开始体验。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://coder.visioncoder.cn"><img src="assets/sponsors/visioncoder.png" alt="VisionCoder" width="120"></a></td>
-<td>感谢 VisionCoder 对本项目的支持。<a href="https://coder.visioncoder.cn">VisionCoder 开发平台</a> 是一个可靠高效的 API 中继服务提供商，提供 Claude Code、Codex、Gemini 等主流 AI 模型，帮助开发者和团队更轻松地集成 AI 功能，提升工作效率。VisionCoder 还为我们的用户提供 <a href="https://coder.visioncoder.cn">Token Plan</a> 限时活动：购买 1 个月，赠送 1 个月。</td>
-</tr>
-
-
-<tr>
-<td width="150"><a href="https://ddshub.short.gy/ccconnect"><img src="assets/sponsors/ddshub.png" alt="DDS Hub" width="120"></a></td>
-<td>感谢 DDS 赞助本项目！呆呆兽是一家专注 Claude 和 CodeX 的可靠高效 API 中转站，稳定运行、价格透明、开票便捷。为开发者提供高性价比的 AI 模型接入服务。通过 <a href="https://ddshub.short.gy/ccconnect">此链接</a> 注册。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://code0.ai/register?aff=5cGO"><img src="assets/sponsors/code0.svg" alt="Code0" width="120"></a></td>
-<td>感谢 Code0 对本项目的赞助！Code0 是面向中国开发者的 AI 模型聚合 API 中转服务，统一兼容 OpenAI / Anthropic / Gemini 三种协议格式，一个 Key 即可调用全量主流模型，稳定适配 Claude Code、Codex、Gemini CLI、cc-connect 等各类 Agent 工具。固定汇率计费：充值 1.5 元人民币 = 1 美元 API 额度，价格透明、国内直连、开箱即用。通过 <a href="https://code0.ai/register?aff=5cGO">此链接</a> 注册。</td>
-</tr>
-
-<tr>
-<td width="150"><a href="https://console.claudeapi.com/register?aff=GDbA"><img src="assets/sponsors/claudeapi.svg" alt="claudeapi.com" width="120"></a></td>
-<td>感谢 claudeapi.com 对本项目的赞助！claudeapi 是面向中高端用户的高质量直连 Claude 服务，完整接入 Anthropic 官方第一方 Keys 和 AWS Bedrock 官方渠道——无逆向工程、无智力降级、无拼接。完整保留 Opus / Sonnet / Haiku 的官方能力、长上下文和 Tool Calling 性能。专为 Claude Code 重度用户、Agent 开发者和企业团队设计，开箱即用、企业级稳定。支持开票和团队入驻。通过 <a href="https://console.claudeapi.com/register?aff=GDbA">此链接</a> 注册。</td>
-</tr>
-</table>
-
-</details>
-
----
-
-<br>
 
 <p align="center">
   <b>在任何聊天工具里，远程操控你的本地 AI Agent。随时随地，随心所欲。</b>
@@ -183,7 +28,7 @@ MiniMax M2.7 是 MiniMax 首个深度参与自我迭代的模型，可自主构�
 - **全局服务商管理** — 在 Web UI 中添加/编辑/删除 Provider，支持从 cc-switch 配置导入。
 - **个人微信** — 用 **微信个人号（ilink 长轮询）** 和本地 Agent 对话；支持扫码 `weixin setup`、CDN 收发图片/文件，**无需公网 IP**。*[接入说明 → `docs/weixin.md`](docs/weixin.md)*
 - **微博私信** — 通过 **微博私信** 与 Agent 对话，WebSocket 连接，无需公网 IP，支持流式文本回复。
-- **飞书增强** — 自动解析 `@成员` 提及、多级回复链识别、完成 Emoji 反应。
+- **飞书增强** — 自动解析 `@成员` 提及、多级回复链识别、完成 Emoji 反应。新增 `thread_isolation` 私聊并发多任务：每条新消息启动独立线程，回复 bot 消息继续同一任务，多个线程并发运行互不阻塞。
 - **新增 Agent** — 支持 Kimi CLI 和 Pi agent。
 
 
@@ -400,11 +245,22 @@ cc-connect update --pre     # 含预发布版本
 /dir [路径|reset]      查看、切换或重置工作目录
 ```
 
-项目配置也可以开启“长时间空闲后自动切到新会话”：
+项目配置也可以开启”长时间空闲后自动切到新会话”：
 
 ```toml
 [[projects]]
 reset_on_idle_mins = 60
+```
+
+飞书私聊可以开启线程并发 — 每条新消息启动独立任务线程，回复 bot 消息继续同一任务，多个线程并发运行：
+
+```toml
+[[projects.platforms]]
+type = “feishu”
+[projects.platforms.options]
+app_id = “cli_xxx”
+app_secret = “xxx”
+thread_isolation = true   # 私聊线程并发（群聊话题线程也同时生效）
 ```
 
 

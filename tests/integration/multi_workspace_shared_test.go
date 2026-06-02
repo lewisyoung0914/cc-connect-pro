@@ -120,6 +120,7 @@ func newIntegrationPlatform(name string, channelNames map[string]string) *integr
 }
 
 func (p *integrationPlatform) Name() string { return p.name }
+func (p *integrationPlatform) Tag() string  { return p.Name() }
 
 func (p *integrationPlatform) Start(handler core.MessageHandler) error {
 	p.mu.Lock()

@@ -184,6 +184,7 @@ type turnPlatform struct {
 }
 
 func (p *turnPlatform) Name() string { return "turn" }
+func (p *turnPlatform) Tag() string  { return p.Name() }
 func (p *turnPlatform) Start(core.MessageHandler) error {
 	return nil
 }

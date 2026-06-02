@@ -12,6 +12,7 @@ type suppressTestPlatform struct {
 }
 
 func (s *suppressTestPlatform) Name() string                             { return "test" }
+func (s *suppressTestPlatform) Tag() string                              { return s.Name() }
 func (s *suppressTestPlatform) Start(MessageHandler) error               { return nil }
 func (s *suppressTestPlatform) Reply(context.Context, any, string) error { return nil }
 func (s *suppressTestPlatform) Send(context.Context, any, string) error  { return nil }
@@ -37,6 +38,7 @@ func TestSuppressStandaloneToolResultEvent(t *testing.T) {
 type stubPlatformNoProgress struct{}
 
 func (stubPlatformNoProgress) Name() string                             { return "plain" }
+func (stubPlatformNoProgress) Tag() string                              { return "plain" }
 func (stubPlatformNoProgress) Start(MessageHandler) error               { return nil }
 func (stubPlatformNoProgress) Reply(context.Context, any, string) error { return nil }
 func (stubPlatformNoProgress) Send(context.Context, any, string) error  { return nil }
@@ -57,6 +59,7 @@ type previewCapturePlatform struct {
 }
 
 func (p *previewCapturePlatform) Name() string                             { return "bridge" }
+func (p *previewCapturePlatform) Tag() string                              { return p.Name() }
 func (p *previewCapturePlatform) Start(MessageHandler) error               { return nil }
 func (p *previewCapturePlatform) Reply(context.Context, any, string) error { return nil }
 func (p *previewCapturePlatform) Send(context.Context, any, string) error  { return nil }

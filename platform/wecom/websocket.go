@@ -139,6 +139,7 @@ func (p *WSPlatform) generateReqID(prefix string) string {
 }
 
 func (p *WSPlatform) Name() string { return "wecom" }
+func (p *WSPlatform) Tag() string { return p.Name() }
 
 func (p *WSPlatform) Start(handler core.MessageHandler) error {
 	p.handler = handler

@@ -318,6 +318,7 @@ var (
 )
 
 func (bp *BridgePlatform) Name() string { return "bridge" }
+func (bp *BridgePlatform) Tag() string { return bp.Name() }
 
 func (bp *BridgePlatform) Start(handler MessageHandler) error {
 	bp.handler = handler

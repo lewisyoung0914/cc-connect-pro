@@ -18,6 +18,11 @@ func (m *MockPlatform) Name() string {
 	return args.String(0)
 }
 
+func (m *MockPlatform) Tag() string {
+	args := m.Called()
+	return args.String(0)
+}
+
 func (m *MockPlatform) Start(handler core.MessageHandler) error {
 	args := m.Called(handler)
 	return args.Error(0)

@@ -150,6 +150,7 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func (p *Platform) Name() string { return "max" }
+func (p *Platform) Tag() string { return p.Name() }
 
 func (p *Platform) Start(handler core.MessageHandler) error {
 	p.mu.Lock()

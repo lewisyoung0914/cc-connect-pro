@@ -57,6 +57,7 @@ type stubPlatformEngine struct {
 }
 
 func (p *stubPlatformEngine) Name() string               { return p.n }
+func (p *stubPlatformEngine) Tag() string                { return p.n }
 func (p *stubPlatformEngine) Start(MessageHandler) error { return nil }
 func (p *stubPlatformEngine) Reply(_ context.Context, _ any, content string) error {
 	p.mu.Lock()

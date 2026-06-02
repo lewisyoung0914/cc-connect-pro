@@ -9,6 +9,7 @@ import (
 // Platform abstracts a messaging platform (Feishu, DingTalk, Slack, etc.).
 type Platform interface {
 	Name() string
+	Tag() string // routing identifier — same as Name() by default; customized for multi-instance platforms
 	Start(handler MessageHandler) error
 	Reply(ctx context.Context, replyCtx any, content string) error
 	Send(ctx context.Context, replyCtx any, content string) error

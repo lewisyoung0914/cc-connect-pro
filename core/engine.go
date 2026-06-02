@@ -2112,6 +2112,9 @@ func (e *Engine) handleMessage(p Platform, msg *Message) {
 	session := sessions.GetOrCreateActive(msg.SessionKey)
 	sessions.UpdateUserMeta(msg.SessionKey, msg.UserName, msg.ChatName)
 	if !session.TryLock() {
+		slog.Info("session busy, TryLock failed",
+			"session_key", msg.SessionKey, "interactive_key", interactiveKey,
+			"session_id", session.ID, "msg_id", msg.MessageID, "platform", msg.Platform)
 		if e.stopCurrentMessageIfRecalled(interactiveKey) {
 			if e.waitForSessionLock(session, recalledStopLockWait) {
 				goto sessionLocked

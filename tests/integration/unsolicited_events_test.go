@@ -125,6 +125,7 @@ func newCapturingPlatform() *capturingPlatform {
 }
 
 func (p *capturingPlatform) Name() string { return "capture" }
+func (p *capturingPlatform) Tag() string  { return p.Name() }
 func (p *capturingPlatform) Start(h core.MessageHandler) error {
 	p.mu.Lock()
 	p.handler = h

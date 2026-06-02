@@ -183,6 +183,7 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func (p *Platform) Name() string { return "wps-xiezuo" }
+func (p *Platform) Tag() string { return p.Name() }
 
 // Start begins the WebSocket connection loop.
 func (p *Platform) Start(handler core.MessageHandler) error {

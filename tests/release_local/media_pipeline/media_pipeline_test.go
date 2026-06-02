@@ -159,6 +159,7 @@ type mediaPlatform struct {
 }
 
 func (p *mediaPlatform) Name() string { return "media" }
+func (p *mediaPlatform) Tag() string  { return p.Name() }
 func (p *mediaPlatform) Start(core.MessageHandler) error {
 	return nil
 }

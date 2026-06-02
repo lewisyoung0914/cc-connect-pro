@@ -199,6 +199,7 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func (p *Platform) Name() string { return "wecom" }
+func (p *Platform) Tag() string { return p.Name() }
 
 func (p *Platform) wecomAPIURL(path string, query url.Values) string {
 	base := strings.TrimRight(strings.TrimSpace(p.apiBaseURL), "/")

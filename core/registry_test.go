@@ -8,6 +8,7 @@ import (
 type stubPlatform struct{ n string }
 
 func (s *stubPlatform) Name() string                                           { return s.n }
+func (s *stubPlatform) Tag() string                                             { return s.n }
 func (s *stubPlatform) Start(MessageHandler) error                             { return nil }
 func (s *stubPlatform) Reply(_ context.Context, _ any, _ string) error         { return nil }
 func (s *stubPlatform) Send(_ context.Context, _ any, _ string) error          { return nil }

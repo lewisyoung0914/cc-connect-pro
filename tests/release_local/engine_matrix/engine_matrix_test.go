@@ -146,6 +146,7 @@ type matrixPlatform struct {
 }
 
 func (p *matrixPlatform) Name() string { return "matrix" }
+func (p *matrixPlatform) Tag() string  { return p.Name() }
 func (p *matrixPlatform) Start(core.MessageHandler) error {
 	return nil
 }

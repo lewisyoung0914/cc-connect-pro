@@ -134,6 +134,7 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func (p *Platform) Name() string { return "discord" }
+func (p *Platform) Tag() string { return p.Name() }
 
 func (p *Platform) selfPlatform() core.Platform {
 	if p != nil && p.self != nil {

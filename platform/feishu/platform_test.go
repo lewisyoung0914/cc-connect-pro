@@ -757,13 +757,13 @@ func TestBuildReplyMessageReqBody_SetsReplyInThreadFlag(t *testing.T) {
 		{
 			name:          "thread isolation enabled",
 			platform:      &Platform{threadIsolation: true},
-			replyCtx:      replyContext{messageID: "om_reply", sessionKey: "feishu:oc_chat:root:om_root"},
+			replyCtx:      replyContext{messageID: "om_reply", chatID: "oc_chat", sessionKey: "feishu:oc_chat:root:om_root", chatType: "group"},
 			wantThreading: true,
 		},
 		{
 			name:          "thread isolation does not affect p2p session",
 			platform:      &Platform{threadIsolation: true},
-			replyCtx:      replyContext{messageID: "om_reply", sessionKey: "feishu:oc_chat:ou_user"},
+			replyCtx:      replyContext{messageID: "om_reply", chatID: "oc_chat", sessionKey: "feishu:oc_chat:ou_user", chatType: "p2p"},
 			wantThreading: false,
 		},
 		{
