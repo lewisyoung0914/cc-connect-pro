@@ -617,6 +617,15 @@ const (
 	MsgWsInitInvalidTarget      MsgKey = "ws_init_invalid_target"
 	MsgWsInitLocalPathsDisabled MsgKey = "ws_init_local_paths_disabled"
 	MsgBackgroundAutoDenied     MsgKey = "background_auto_denied"
+
+	// Card template title MsgKeys (translations added in Task 4)
+	MsgKeyTemplateCodeTitle       MsgKey = "template_code_title"
+	MsgKeyTemplateExplainTitle    MsgKey = "template_explain_title"
+	MsgKeyTemplateProgressTitle   MsgKey = "template_progress_title"
+	MsgKeyTemplateProgressDone    MsgKey = "template_progress_done"
+	MsgKeyTemplatePermissionTitle MsgKey = "template_permission_title"
+	MsgKeyTemplateErrorTitle      MsgKey = "template_error_title"
+	MsgKeyTemplateWarningTitle    MsgKey = "template_warning_title"
 )
 
 var messages = map[MsgKey]map[Language]string{
@@ -3958,6 +3967,28 @@ var messages = map[MsgKey]map[Language]string{
 		LangTraditionalChinese: "`/workspace init` 未啟用本機目錄目標。請使用 git 倉庫地址，或在此專案配置 `workspace_init_allow_local_paths = true`。",
 		LangJapanese:           "`/workspace init` ではローカルディレクトリ対象が無効です。git URL を使うか、このプロジェクトで `workspace_init_allow_local_paths = true` を有効にしてください。",
 		LangSpanish:            "Los destinos de directorio local están deshabilitados para `/workspace init`. Use una URL de git o habilite `workspace_init_allow_local_paths = true` para este proyecto.",
+	},
+	// Card template titles (placeholder English; full translations in Task 4)
+	MsgKeyTemplateCodeTitle: {
+		LangEnglish: "Code",
+	},
+	MsgKeyTemplateExplainTitle: {
+		LangEnglish: "Analysis",
+	},
+	MsgKeyTemplateProgressTitle: {
+		LangEnglish: "In Progress",
+	},
+	MsgKeyTemplateProgressDone: {
+		LangEnglish: "Completed",
+	},
+	MsgKeyTemplatePermissionTitle: {
+		LangEnglish: "Permission Request",
+	},
+	MsgKeyTemplateErrorTitle: {
+		LangEnglish: "Error",
+	},
+	MsgKeyTemplateWarningTitle: {
+		LangEnglish: "Warning",
 	},
 }
 
