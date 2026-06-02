@@ -104,14 +104,14 @@ func ConsumeRestartNotify(dataDir string) *RestartRequest {
 
 // SendRestartNotification sends a "restart successful" message to the
 // platform/session that initiated the restart.
-func (e *Engine) SendRestartNotification(platformName, sessionKey string) {
+func (e *Engine) SendRestartNotification(platformTag, sessionKey string) {
 	for _, p := range e.platforms {
-		if p.Name() != platformName {
+		if p.Tag() != platformTag {
 			continue
 		}
 		rc, ok := p.(ReplyContextReconstructor)
 		if !ok {
-			slog.Debug("restart notify: platform does not support ReconstructReplyCtx", "platform", platformName)
+			slog.Debug("restart notify: platform does not support ReconstructReplyCtx", "platform", platformTag)
 			return
 		}
 		rctx, err := rc.ReconstructReplyCtx(sessionKey)
@@ -124,7 +124,7 @@ func (e *Engine) SendRestartNotification(platformName, sessionKey string) {
 			text += fmt.Sprintf(" (%s)", CurrentVersion)
 		}
 		if err := e.waitOutgoing(p); err != nil {
-			slog.Debug("restart notify: outgoing wait cancelled or limited", "platform", platformName, "error", err)
+			slog.Debug("restart notify: outgoing wait cancelled or limited", "platform", platformTag, "error", err)
 			return
 		}
 		if err := p.Send(e.ctx, rctx, text); err != nil {
@@ -1044,39 +1044,39 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 	})
 
 	sessionKey := job.SessionKey
-	platformName := ""
+	platformTag := ""
 	if idx := strings.Index(sessionKey, ":"); idx > 0 {
-		platformName = sessionKey[:idx]
+		platformTag = sessionKey[:idx]
 	}
 
 	var targetPlatform Platform
 	for _, p := range e.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
 	}
 	// Fallback: in multi-workspace mode the stored session key may be prefixed
 	// with the workspace path (e.g. "/home/user/project:slack:C123:U456").
-	// Search for a known platform name within the key and strip the prefix.
+	// Search for a known platform tag within the key and strip the prefix.
 	if targetPlatform == nil {
 		for _, p := range e.platforms {
-			needle := ":" + p.Name() + ":"
+			needle := ":" + p.Tag() + ":"
 			if idx := strings.Index(sessionKey, needle); idx >= 0 {
 				targetPlatform = p
-				platformName = p.Name()
+				platformTag = p.Tag()
 				sessionKey = sessionKey[idx+1:] // strip workspace prefix
 				break
 			}
 		}
 	}
 	if targetPlatform == nil {
-		return fmt.Errorf("platform %q not found for session %q", platformName, sessionKey)
+		return fmt.Errorf("platform %q not found for session %q", platformTag, sessionKey)
 	}
 
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		return fmt.Errorf("platform %q does not support proactive messaging (cron)", platformName)
+		return fmt.Errorf("platform %q does not support proactive messaging (cron)", platformTag)
 	}
 
 	runSessionKey := sessionKey
@@ -1150,7 +1150,7 @@ func (e *Engine) ExecuteCronJob(job *CronJob) error {
 
 	msg := &Message{
 		SessionKey:   sessionKey,
-		Platform:     platformName,
+		Platform:     platformTag,
 		UserID:       "cron",
 		UserName:     "cron",
 		Content:      content,
@@ -1469,39 +1469,39 @@ func (e *Engine) finishCronShell(p Platform, replyCtx any, cmd *exec.Cmd, mu *sy
 // ExecuteHeartbeat runs a heartbeat check by injecting a synthetic message
 // into the main session, similar to cron but designed for periodic awareness.
 func (e *Engine) ExecuteHeartbeat(sessionKey, prompt string, silent bool) error {
-	platformName := ""
+	platformTag := ""
 	if idx := strings.Index(sessionKey, ":"); idx > 0 {
-		platformName = sessionKey[:idx]
+		platformTag = sessionKey[:idx]
 	}
 
 	var targetPlatform Platform
 	for _, p := range e.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
 	}
 	// Fallback: in multi-workspace mode the stored session key may be prefixed
 	// with the workspace path (e.g. "/home/user/project:slack:C123:U456").
-	// Search for a known platform name within the key and strip the prefix.
+	// Search for a known platform tag within the key and strip the prefix.
 	if targetPlatform == nil {
 		for _, p := range e.platforms {
-			needle := ":" + p.Name() + ":"
+			needle := ":" + p.Tag() + ":"
 			if idx := strings.Index(sessionKey, needle); idx >= 0 {
 				targetPlatform = p
-				platformName = p.Name()
+				platformTag = p.Tag()
 				sessionKey = sessionKey[idx+1:] // strip workspace prefix
 				break
 			}
 		}
 	}
 	if targetPlatform == nil {
-		return fmt.Errorf("platform %q not found for session %q", platformName, sessionKey)
+		return fmt.Errorf("platform %q not found for session %q", platformTag, sessionKey)
 	}
 
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		return fmt.Errorf("platform %q does not support proactive messaging (heartbeat)", platformName)
+		return fmt.Errorf("platform %q does not support proactive messaging (heartbeat)", platformTag)
 	}
 
 	replyCtx, err := rc.ReconstructReplyCtx(sessionKey)
@@ -1515,7 +1515,7 @@ func (e *Engine) ExecuteHeartbeat(sessionKey, prompt string, silent bool) error 
 
 	msg := &Message{
 		SessionKey: sessionKey,
-		Platform:   platformName,
+		Platform:   platformTag,
 		UserID:     "heartbeat",
 		UserName:   "heartbeat",
 		Content:    prompt,
@@ -8996,13 +8996,13 @@ func (e *Engine) SendToSessionWithAttachments(sessionKey, message string, images
 
 	if p == nil && sessionKey != "" {
 		strippedKey := sessionKey
-		platformName := ""
+		platformTag := ""
 		if idx := strings.Index(strippedKey, ":"); idx > 0 {
-			platformName = strippedKey[:idx]
+			platformTag = strippedKey[:idx]
 		}
 		var targetPlatform Platform
 		for _, candidate := range e.platforms {
-			if candidate.Name() == platformName {
+			if candidate.Tag() == platformTag {
 				targetPlatform = candidate
 				break
 			}
@@ -9011,7 +9011,7 @@ func (e *Engine) SendToSessionWithAttachments(sessionKey, message string, images
 		// workspace path (same heuristic as ExecuteCronJob / ExecuteHeartbeat).
 		if targetPlatform == nil {
 			for _, candidate := range e.platforms {
-				needle := ":" + candidate.Name() + ":"
+				needle := ":" + candidate.Tag() + ":"
 				if idx := strings.Index(strippedKey, needle); idx >= 0 {
 					targetPlatform = candidate
 					strippedKey = strippedKey[idx+1:]
@@ -9570,7 +9570,7 @@ func (e *Engine) handleCardNav(action string, sessionKey string) *Card {
 		return e.renderWhoamiCard(&Message{
 			SessionKey: sessionKey,
 			UserID:     extractUserID(sessionKey),
-			Platform:   extractPlatformName(sessionKey),
+			Platform:   extractPlatformTag(sessionKey),
 		})
 	case "/version":
 		return e.renderVersionCard()
@@ -10133,10 +10133,10 @@ func (e *Engine) pushDeleteModeResultCard(sessionKey string) {
 	}
 	card := e.renderDeleteModeResultCard(dm)
 
-	platformName := extractPlatformName(sessionKey)
+	platformTag := extractPlatformTag(sessionKey)
 	var targetPlatform Platform
 	for _, p := range e.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
@@ -10158,7 +10158,7 @@ func (e *Engine) pushDeleteModeResultCard(sessionKey string) {
 	// Fallback: send a new card message.
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		slog.Warn("delete mode: platform does not support proactive messaging", "platform", platformName)
+		slog.Warn("delete mode: platform does not support proactive messaging", "platform", platformTag)
 		return
 	}
 	rctx, err := rc.ReconstructReplyCtx(sessionKey)
@@ -10194,10 +10194,10 @@ func (e *Engine) performModelSwitchAsync(sessionKey string, state *interactiveSt
 }
 
 func (e *Engine) pushModelSwitchResultCard(sessionKey string, card *Card) {
-	platformName := extractPlatformName(sessionKey)
+	platformTag := extractPlatformTag(sessionKey)
 	var targetPlatform Platform
 	for _, p := range e.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
@@ -10217,7 +10217,7 @@ func (e *Engine) pushModelSwitchResultCard(sessionKey string, card *Card) {
 
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		slog.Warn("model switch: platform does not support proactive messaging", "platform", platformName)
+		slog.Warn("model switch: platform does not support proactive messaging", "platform", platformTag)
 		return
 	}
 	rctx, err := rc.ReconstructReplyCtx(sessionKey)
@@ -13385,25 +13385,25 @@ func stringSliceContains(ss []string, target string) bool {
 	return false
 }
 
-func extractPlatformName(sessionKey string) string {
+func extractPlatformTag(sessionKey string) string {
 	if i := strings.IndexByte(sessionKey, ':'); i >= 0 {
 		return sessionKey[:i]
 	}
 	return sessionKey
 }
 
-func workspaceChannelKey(platformName, channelID string) string {
+func workspaceChannelKey(platformTag, channelID string) string {
 	if channelID == "" {
 		return ""
 	}
-	if platformName == "" {
+	if platformTag == "" {
 		return channelID
 	}
-	return platformName + ":" + channelID
+	return platformTag + ":" + channelID
 }
 
 func extractWorkspaceChannelKey(sessionKey string) string {
-	return workspaceChannelKey(extractPlatformName(sessionKey), extractChannelID(sessionKey))
+	return workspaceChannelKey(extractPlatformTag(sessionKey), extractChannelID(sessionKey))
 }
 
 // effectiveChannelID returns the channel identifier from a Message.
@@ -13627,7 +13627,7 @@ func (e *Engine) lookupEffectiveWorkspaceBinding(channelKey string) (*WorkspaceB
 // Returns (workspacePath, channelName, error).
 // If workspacePath is empty, the init flow should be triggered.
 func (e *Engine) resolveWorkspace(p Platform, channelID string) (string, string, error) {
-	channelKey := workspaceChannelKey(p.Name(), channelID)
+	channelKey := workspaceChannelKey(p.Tag(), channelID)
 
 	// Step 1: Check existing binding
 	if b, _, usable := e.lookupEffectiveWorkspaceBinding(channelKey); b != nil {

@@ -11339,9 +11339,9 @@ func TestExtractSessionKeyParts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPlatform := extractPlatformName(tt.sessionKey)
+			gotPlatform := extractPlatformTag(tt.sessionKey)
 			if gotPlatform != tt.wantPlatform {
-				t.Errorf("extractPlatformName(%q) = %q, want %q", tt.sessionKey, gotPlatform, tt.wantPlatform)
+				t.Errorf("extractPlatformTag(%q) = %q, want %q", tt.sessionKey, gotPlatform, tt.wantPlatform)
 			}
 
 			gotChannel := extractChannelID(tt.sessionKey)

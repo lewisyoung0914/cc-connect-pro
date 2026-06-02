@@ -82,7 +82,7 @@ func NormalizeCronSessionMode(s string) string {
 
 func validateCronJob(j *CronJob) error {
 	// SessionKey anchors the cron execution to a platform (ExecuteCronJob
-	// derives platformName from the prefix before ":"). Without it the job
+	// derives platformTag from the prefix before ":"). Without it the job
 	// is persisted but fails at fire-time with the unhelpful
 	// `platform "" not found for session ""`. Reject it up front so the
 	// caller (management API, /cron/add, /cron edit) sees an immediate

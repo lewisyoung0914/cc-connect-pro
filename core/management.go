@@ -1617,7 +1617,7 @@ func (m *ManagementServer) listBridgeAdapters() []map[string]any {
 		project := ""
 		m.bridgeServer.enginesMu.RLock()
 		for pName, ref := range m.bridgeServer.engines {
-			if ref.platform != nil && ref.platform.Name() == name {
+			if ref.platform != nil && ref.platform.Tag() == name {
 				project = pName
 				break
 			}

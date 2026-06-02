@@ -200,26 +200,26 @@ func (ws *WebhookServer) resolveEngine(project string) (*Engine, error) {
 }
 
 func (ws *WebhookServer) executePrompt(engine *Engine, sessionKey, prompt string, silent bool, event string) {
-	platformName := ""
+	platformTag := ""
 	if idx := strings.Index(sessionKey, ":"); idx > 0 {
-		platformName = sessionKey[:idx]
+		platformTag = sessionKey[:idx]
 	}
 
 	var targetPlatform Platform
 	for _, p := range engine.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
 	}
 	if targetPlatform == nil {
-		slog.Error("webhook: platform not found", "event", event, "platform", platformName)
+		slog.Error("webhook: platform not found", "event", event, "platform", platformTag)
 		return
 	}
 
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		slog.Error("webhook: platform does not support proactive messaging", "event", event, "platform", platformName)
+		slog.Error("webhook: platform does not support proactive messaging", "event", event, "platform", platformTag)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (ws *WebhookServer) executePrompt(engine *Engine, sessionKey, prompt string
 
 	msg := &Message{
 		SessionKey: sessionKey,
-		Platform:   platformName,
+		Platform:   platformTag,
 		UserID:     "webhook",
 		UserName:   "webhook",
 		Content:    prompt,
@@ -259,26 +259,26 @@ const webhookShellTimeout = 5 * time.Minute
 
 func (ws *WebhookServer) executeShell(engine *Engine, req WebhookRequest, event string) {
 	sessionKey := req.SessionKey
-	platformName := ""
+	platformTag := ""
 	if idx := strings.Index(sessionKey, ":"); idx > 0 {
-		platformName = sessionKey[:idx]
+		platformTag = sessionKey[:idx]
 	}
 
 	var targetPlatform Platform
 	for _, p := range engine.platforms {
-		if p.Name() == platformName {
+		if p.Tag() == platformTag {
 			targetPlatform = p
 			break
 		}
 	}
 	if targetPlatform == nil {
-		slog.Error("webhook: platform not found for shell exec", "event", event, "platform", platformName)
+		slog.Error("webhook: platform not found for shell exec", "event", event, "platform", platformTag)
 		return
 	}
 
 	rc, ok := targetPlatform.(ReplyContextReconstructor)
 	if !ok {
-		slog.Error("webhook: platform does not support proactive messaging", "event", event, "platform", platformName)
+		slog.Error("webhook: platform does not support proactive messaging", "event", event, "platform", platformTag)
 		return
 	}
 
