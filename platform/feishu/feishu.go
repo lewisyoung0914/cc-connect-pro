@@ -114,7 +114,8 @@ type replyContext struct {
 
 type Platform struct {
 	mu                         sync.RWMutex
-	platformName               string
+	platformName               string      // Name() returns this ("feishu" or "lark")
+	instanceTag                string      // Tag() returns this ("feishu" or "feishu-teamA")
 	domain                     string
 	appID                      string
 	appSecret                  string
@@ -184,6 +185,18 @@ func New(opts map[string]any) (core.Platform, error) {
 }
 
 func newPlatform(name, domain string, opts map[string]any) (core.Platform, error) {
+	// Read optional instance name from config
+	instanceName, _ := opts["cc_platform_name"].(string)
+	if instanceName == "" {
+		instanceName = name
+	}
+
+	// Validate: custom name must start with platform type + "-"
+	if instanceName != name && !strings.HasPrefix(instanceName, name+"-") {
+		return nil, fmt.Errorf("feishu: invalid name %q: must equal %q or start with %q followed by '-'",
+			instanceName, name, name)
+	}
+
 	appID, _ := opts["app_id"].(string)
 	appSecret, _ := opts["app_secret"].(string)
 	if appID == "" || appSecret == "" {
@@ -271,6 +284,7 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 
 	base := &Platform{
 		platformName:               name,
+		instanceTag:                instanceName,
 		domain:                     domain,
 		appID:                      appID,
 		appSecret:                  appSecret,
@@ -305,13 +319,23 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 }
 
 func (p *Platform) Name() string { return p.platformName }
-func (p *Platform) Tag() string { return p.platformName }
+func (p *Platform) Tag() string {
+	if p.instanceTag != "" {
+		return p.instanceTag
+	}
+	return p.platformName
+}
 
 func (p *Platform) ProgressStyle() string { return p.progressStyle }
 
 func (p *Platform) SupportsProgressCardPayload() bool { return true }
 
-func (p *Platform) tag() string { return p.platformName }
+func (p *Platform) tag() string {
+	if p.instanceTag != "" {
+		return p.instanceTag
+	}
+	return p.platformName
+}
 
 func (p *Platform) dispatchPlatform() core.Platform {
 	if p.self != nil {

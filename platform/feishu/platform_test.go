@@ -17,6 +17,8 @@ import (
 	"github.com/chenhg5/cc-connect/core"
 	callback "github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew_DefaultsToInteractivePlatform(t *testing.T) {
@@ -1376,4 +1378,77 @@ func TestCardAction_NavSlow_NilCard_NoRefresh(t *testing.T) {
 	if got := mock.refreshCalled.Load(); got != 0 {
 		t.Fatalf("RefreshCard should not be called for nil card, called %d times", got)
 	}
+}
+
+func TestTagDefault(t *testing.T) {
+	opts := map[string]any{
+		"app_id":     "test_app",
+		"app_secret": "test_secret",
+	}
+	p, err := newPlatform("feishu", lark.FeishuBaseUrl, opts)
+	require.NoError(t, err)
+
+	feishu := unwrapPlatform(p)
+	assert.Equal(t, "feishu", feishu.Name())
+	assert.Equal(t, "feishu", feishu.Tag())
+	assert.Equal(t, "feishu", feishu.tag())
+}
+
+func TestTagCustom(t *testing.T) {
+	opts := map[string]any{
+		"app_id":            "test_app",
+		"app_secret":         "test_secret",
+		"cc_platform_name":   "feishu-teamA",
+	}
+	p, err := newPlatform("feishu", lark.FeishuBaseUrl, opts)
+	require.NoError(t, err)
+
+	feishu := unwrapPlatform(p)
+	assert.Equal(t, "feishu", feishu.Name())       // Name() unchanged
+	assert.Equal(t, "feishu-teamA", feishu.Tag())   // Tag() custom
+	assert.Equal(t, "feishu-teamA", feishu.tag())   // tag() custom
+}
+
+func TestTagInvalidName(t *testing.T) {
+	opts := map[string]any{
+		"app_id":            "test_app",
+		"app_secret":         "test_secret",
+		"cc_platform_name":   "myapp",
+	}
+	_, err := newPlatform("feishu", lark.FeishuBaseUrl, opts)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid name")
+	assert.Contains(t, err.Error(), "myapp")
+}
+
+func TestTagLarkVariant(t *testing.T) {
+	// valid lark name
+	opts1 := map[string]any{
+		"app_id":            "test_app",
+		"app_secret":         "test_secret",
+		"cc_platform_name":   "lark-intl",
+	}
+	p1, err := newPlatform("lark", lark.LarkBaseUrl, opts1)
+	require.NoError(t, err)
+	lark1 := unwrapPlatform(p1)
+	assert.Equal(t, "lark", lark1.Name())
+	assert.Equal(t, "lark-intl", lark1.Tag())
+
+	// invalid lark name
+	opts2 := map[string]any{
+		"app_id":            "test_app",
+		"app_secret":         "test_secret",
+		"cc_platform_name":   "myapp",
+	}
+	_, err = newPlatform("lark", lark.LarkBaseUrl, opts2)
+	assert.Error(t, err)
+}
+
+// unwrapPlatform extracts the inner *Platform from either a *Platform
+// or an *interactivePlatform (which embeds *Platform).
+func unwrapPlatform(p core.Platform) *Platform {
+	if ip, ok := p.(*interactivePlatform); ok {
+		return ip.Platform
+	}
+	return p.(*Platform)
 }
