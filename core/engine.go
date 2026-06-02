@@ -4573,7 +4573,19 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 						break
 					}
 				}
-				e.send(p, replyCtx, userMsg)
+				if cardSender, ok := p.(CardSender); ok {
+					card := NewCard().
+						WithTemplate(TemplateError).
+						Title(e.i18n.T(MsgKeyTemplateErrorTitle), "red").
+						Markdown(userMsg).
+						Build()
+					if err := cardSender.SendCard(e.ctx, replyCtx, card); err != nil {
+						slog.Warn("engine: error template card send failed, falling back to plain text", "platform", p.Name(), "error", err)
+						e.send(p, replyCtx, userMsg)
+					}
+				} else {
+					e.send(p, replyCtx, userMsg)
+				}
 			}
 			// Only drop queued messages if the agent session is dead.
 			// Some agents (e.g. Codex) emit EventError for per-turn failures
