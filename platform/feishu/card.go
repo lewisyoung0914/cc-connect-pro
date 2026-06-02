@@ -98,6 +98,14 @@ func renderCardMap(card *core.Card, sessionKey string) map[string]any {
 		return result
 	}
 
+	// If a template is specified, use template-specific rendering
+	if card.Template != "" {
+		if transformed, ok := renderDeleteModeCheckerCard(card, nil); ok {
+			return transformed
+		}
+		return renderTemplateCard(card, sessionKey)
+	}
+
 	if card.Header != nil && card.Header.Title != "" {
 		color := card.Header.Color
 		if color == "" {
