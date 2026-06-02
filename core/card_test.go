@@ -56,3 +56,59 @@ func TestCardHasButtons_DetectsInteractiveElements(t *testing.T) {
 		})
 	}
 }
+
+func TestCardTemplateConstants(t *testing.T) {
+	tests := []struct {
+		name     string
+		template CardTemplate
+		want     string
+	}{
+		{"code", TemplateCode, "code"},
+		{"explain", TemplateExplain, "explain"},
+		{"progress", TemplateProgress, "progress"},
+		{"permission", TemplatePermission, "permission"},
+		{"error", TemplateError, "error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.template) != tt.want {
+				t.Errorf("CardTemplate %s = %q, want %q", tt.name, tt.template, tt.want)
+			}
+		})
+	}
+}
+
+func TestCardBuilderWithTemplate(t *testing.T) {
+	card := NewCard().WithTemplate(TemplateCode).Markdown("hello").Build()
+	if card.Template != TemplateCode {
+		t.Errorf("card.Template = %q, want %q", card.Template, TemplateCode)
+	}
+	if len(card.Elements) != 1 {
+		t.Errorf("len(card.Elements) = %d, want 1", len(card.Elements))
+	}
+}
+
+func TestCardBuilderWithTemplateAndTitle(t *testing.T) {
+	card := NewCard().Title("代码结果", "blue").WithTemplate(TemplateCode).Markdown("hello").Build()
+	if card.Template != TemplateCode {
+		t.Errorf("card.Template = %q, want %q", card.Template, TemplateCode)
+	}
+	if card.Header.Title != "代码结果" {
+		t.Errorf("card.Header.Title = %q, want %q", card.Header.Title, "代码结果")
+	}
+}
+
+func TestCardWithoutTemplate(t *testing.T) {
+	card := NewCard().Markdown("hello").Build()
+	if card.Template != "" {
+		t.Errorf("card.Template = %q, want empty", card.Template)
+	}
+}
+
+func TestCardRenderTextWithTemplate(t *testing.T) {
+	card := NewCard().WithTemplate(TemplateExplain).Markdown("some text").Build()
+	text := card.RenderText()
+	if text != "some text" {
+		t.Errorf("RenderText() = %q, want %q", text, "some text")
+	}
+}

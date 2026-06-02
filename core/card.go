@@ -5,12 +5,26 @@ import (
 	"strings"
 )
 
+// CardTemplate identifies the visual template a card should use when rendered
+// by platform-specific adapters. The template controls header color, title,
+// layout structure, and interactive elements.
+type CardTemplate string
+
+const (
+	TemplateCode       CardTemplate = "code"       // 代码回复
+	TemplateExplain    CardTemplate = "explain"    // 解释/分析
+	TemplateProgress   CardTemplate = "progress"   // 工具调用进度
+	TemplatePermission CardTemplate = "permission" // 权限请求
+	TemplateError      CardTemplate = "error"      // 错误/警告
+)
+
 // Card represents a structured rich message that can be rendered as
 // platform-specific cards (Feishu Interactive Card, Telegram message, etc.)
 // or degraded to plain text for platforms without card support.
 type Card struct {
 	Header   *CardHeader
 	Elements []CardElement
+	Template CardTemplate // optional template type for platform-specific rendering
 }
 
 // CardHeader is the optional colored title bar of a card.
@@ -212,6 +226,13 @@ func (b *CardBuilder) TaggedNote(tag, text string) *CardBuilder {
 	if text != "" {
 		b.card.Elements = append(b.card.Elements, CardNote{Text: text, Tag: tag})
 	}
+	return b
+}
+
+// WithTemplate sets the card template type, which influences how platform
+// renderers apply visual presets (header color, title, layout).
+func (b *CardBuilder) WithTemplate(t CardTemplate) *CardBuilder {
+	b.card.Template = t
 	return b
 }
 
