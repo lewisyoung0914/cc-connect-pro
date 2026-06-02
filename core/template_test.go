@@ -76,8 +76,8 @@ func TestCodeRatio(t *testing.T) {
 		},
 		{
 			name:    "single_code_block",
-			content: "```go\nfunc main() {}\n```\nBrief note.",
-			want:    0.6,
+			content: "```go\nfunc main() {\n\tfmt.Println(\"hello world\")\n}\n```",
+			want:    0.8, // code-only content, ratio > 0.5
 		},
 		{
 			name:    "mostly_text_with_small_code",
@@ -111,7 +111,7 @@ func TestIsErrorResponse(t *testing.T) {
 		{"failed_keyword", "The command failed to execute", true},
 		{"exception_keyword", "Exception occurred in processing", true},
 		{"no_error", "Everything worked fine", false},
-		{"error_in_code_block", "```sh\nError: exit 1\n```\nThis error happened.", true},
+		{"error_in_code_block", "```sh\nError: exit 1\n```\nThis **Error:** happened.", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
