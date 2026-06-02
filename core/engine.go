@@ -9111,7 +9111,8 @@ func (e *Engine) sendPermissionPrompt(p Platform, replyCtx any, prompt, toolName
 			Extra: extra("✅ "+e.i18n.T(MsgPermBtnAllowAll), "green")}
 
 		card := NewCard().
-			Title(e.i18n.T(MsgPermCardTitle), "orange").
+			WithTemplate(TemplatePermission).
+			Title(e.i18n.T(MsgKeyTemplatePermissionTitle), "red").
 			Markdown(body).
 			ButtonsEqual(allowBtn, denyBtn).
 			Buttons(allowAllBtn).
