@@ -917,6 +917,7 @@ mode = "default" # "default" | "acceptEdits" (edit) | "plan" | "auto" | "bypassP
 
 [[projects.platforms]]
 type = "feishu"
+# name = "feishu"  # optional, defaults to type. Specify unique name when running multiple feishu instances
 
 [projects.platforms.options]
 app_id = "your-feishu-app-id"
@@ -960,6 +961,7 @@ app_secret = "your-feishu-app-secret"
 
 # [[projects.platforms]]
 # type = "lark"
+# name = "lark"    # optional, defaults to type. Specify unique name when running multiple lark instances
 #
 # [projects.platforms.options]
 # app_id = "your-lark-app-id"

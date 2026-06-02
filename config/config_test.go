@@ -70,6 +70,51 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: `projects[0].platforms[0].type is required`,
 		},
 		{
+			name: "rejects platform name that does not match type",
+			cfg: Config{
+				Projects: []ProjectConfig{
+					func() ProjectConfig {
+						p := validProject("demo")
+						p.Platforms[0].Name = "slack"
+						return p
+					}(),
+				},
+			},
+			wantErr: `projects[0].platforms[0].name must equal type or start with type + "-"`,
+		},
+		{
+			name: "accepts platform name equal to type",
+			cfg: Config{
+				Projects: []ProjectConfig{
+					func() ProjectConfig {
+						p := validProject("demo")
+						p.Platforms[0].Name = "telegram"
+						return p
+					}(),
+				},
+			},
+		},
+		{
+			name: "accepts platform name with type prefix",
+			cfg: Config{
+				Projects: []ProjectConfig{
+					func() ProjectConfig {
+						p := validProject("demo")
+						p.Platforms[0].Name = "telegram-teamA"
+						return p
+					}(),
+				},
+			},
+		},
+		{
+			name: "accepts empty platform name (defaults to type)",
+			cfg: Config{
+				Projects: []ProjectConfig{
+					validProject("demo"),
+				},
+			},
+		},
+		{
 			name: "multi workspace requires base dir",
 			cfg: Config{
 				Projects: []ProjectConfig{

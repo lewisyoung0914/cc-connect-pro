@@ -442,6 +442,7 @@ type CodexProviderConfig struct {
 
 type PlatformConfig struct {
 	Type    string         `toml:"type"`
+	Name    string         `toml:"name"`    // optional, instance identifier; defaults to Type
 	Options map[string]any `toml:"options"`
 }
 
@@ -800,6 +801,10 @@ func (c *Config) validate() error {
 		for j, p := range proj.Platforms {
 			if p.Type == "" {
 				return fmt.Errorf("config: %s.platforms[%d].type is required", prefix, j)
+			}
+			if p.Name != "" && p.Name != p.Type && !strings.HasPrefix(p.Name, p.Type+"-") {
+				return fmt.Errorf("config: %s.platforms[%d].name must equal type or start with type + \"-\" (e.g. \"feishu-teamA\"), got %q",
+					prefix, j, p.Name)
 			}
 		}
 		if proj.Mode == "multi-workspace" {
