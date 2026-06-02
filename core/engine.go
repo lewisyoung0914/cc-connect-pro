@@ -4339,6 +4339,24 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				slog.Debug("EventResult: suppressed duplicate side-channel text", "response_len", len(fullResponse))
 			} else if sp.finish(fullResponse) {
 				slog.Debug("EventResult: finalized stream preview in-place", "response_len", len(fullResponse))
+			} else if cardSender, ok := p.(CardSender); ok {
+				// Template-aware final result: select template based on content
+				// and send a template card instead of plain text chunks.
+				template := SelectTemplate(fullResponse, len(toolSteps) > 0, false)
+				card := NewCard().
+					WithTemplate(template).
+					Title(e.i18n.T(templateTitleKey(template)), templateHeaderColor(template)).
+					Markdown(fullResponse).
+					Build()
+				slog.Debug("EventResult: sending template card", "template", template, "response_len", len(fullResponse))
+				if err := cardSender.SendCard(e.ctx, replyCtx, card); err != nil {
+					slog.Warn("engine: template card send failed, falling back to plain text", "platform", p.Name(), "error", err)
+					for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
+						if err := sendWorkspaceWithError(p, replyCtx, chunk); err != nil {
+							return
+						}
+					}
+				}
 			} else {
 				slog.Debug("EventResult: sending via p.Send (preview inactive or failed)", "response_len", len(fullResponse), "chunks", len(splitMessage(fullResponse, maxPlatformMessageLen)))
 				for _, chunk := range splitMessage(fullResponse, maxPlatformMessageLen) {
