@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultSkillPresetsURL         = "https://raw.githubusercontent.com/chenhg5/cc-connect/main/skill-presets.json"
+	defaultSkillPresetsURL         = "https://raw.githubusercontent.com/lewisyoung0914/cc-connect-pro/main/skill-presets.json"
 	fallbackSkillPresetsURL        = "https://gitee.com/chenhg5/cc-connect/raw/main/skill-presets.json"
 	skillPresetsCacheTTL           = 6 * time.Hour
 	skillPresetsHTTPTimeout        = 15 * time.Second

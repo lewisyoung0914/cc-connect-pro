@@ -3,20 +3,20 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/chenhg5/cc-connect/actions/workflows/ci.yml">
-    <img src="https://github.com/chenhg5/cc-connect/actions/workflows/ci.yml/badge.svg" alt="CI Status"/>
+  <a href="https://github.com/lewisyoung0914/cc-connect-pro/actions/workflows/ci.yml">
+    <img src="https://github.com/lewisyoung0914/cc-connect-pro/actions/workflows/ci.yml/badge.svg" alt="CI Status"/>
   </a>
-  <a href="https://github.com/chenhg5/cc-connect/releases">
-    <img src="https://img.shields.io/github/v/release/chenhg5/cc-connect?include_prereleases" alt="Release"/>
+  <a href="https://github.com/lewisyoung0914/cc-connect-pro/releases">
+    <img src="https://img.shields.io/github/v/release/lewisyoung0914/cc-connect-pro?include_prereleases" alt="Release"/>
   </a>
   <a href="https://www.npmjs.com/package/cc-connect">
     <img src="https://img.shields.io/npm/dm/cc-connect?logo=npm" alt="npm downloads"/>
   </a>
-  <a href="https://github.com/chenhg5/cc-connect/blob/main/LICENSE">
+  <a href="https://github.com/lewisyoung0914/cc-connect-pro/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   </a>
-  <a href="https://goreportcard.com/report/github.com/chenhg5/cc-connect">
-    <img src="https://goreportcard.com/badge/github.com/chenhg5/cc-connect" alt="Go Report Card"/>
+  <a href="https://goreportcard.com/report/github.com/lewisyoung0914/cc-connect-pro">
+    <img src="https://goreportcard.com/badge/github.com/lewisyoung0914/cc-connect-pro" alt="Go Report Card"/>
   </a>
 </p>
 
@@ -35,7 +35,7 @@
 
 <p align="center">
   <a href="https://trendshift.io/repositories/23266" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/23266" alt="chenhg5/cc-connect | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+    <img src="https://trendshift.io/api/badge/repositories/23266" alt="lewisyoung0914/cc-connect-pro | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
   </a>
 </p>
 
@@ -47,7 +47,7 @@
 - **Global Provider Management** — Add/edit/delete providers in the web UI; import from cc-switch config.
 - **Personal WeChat** — Chat with your local agent from **Weixin (personal)** via ilink long-polling; QR `weixin setup`, CDN media, no public IP. *[Setup → `docs/weixin.md`](docs/weixin.md)*
 - **Weibo DM** — Chat with your agent via **Weibo private messages** over WebSocket; no public IP needed, text streaming supported.
-- **Feishu Enhancements** — Auto-resolve `@name` mentions, multi-level reply chain recognition, done-emoji reactions. New `thread_isolation` for P2P concurrent multi-task: each new message starts an independent thread, replying to bot continues the same task, multiple threads run concurrently without blocking.
+- **Feishu Enhancements** — Auto-resolve `@name` mentions, multi-level reply chain recognition, done-emoji reactions. New `thread_isolation` for P2P concurrent multi-task: each new message starts an independent thread, replying to bot continues the same task, multiple threads run concurrently without blocking. **Multi-app support** — connect multiple Feishu/Lark apps to the same or different agents; each app gets its own `name` tag for correct routing of cron, heartbeat, and proactive messages.
 - **New Agents** — Kimi CLI and Pi agent support added.
 
 
@@ -127,10 +127,12 @@ High-level view of what each **built-in platform** can do in cc-connect.
 ### 🤖 Install & Configure via AI Agent (Recommended)
 
 > **The easiest way** — Send this to Claude Code or any AI coding agent, and it will handle the entire installation and configuration for you:
-
-```bash
-Follow https://raw.githubusercontent.com/chenhg5/cc-connect/refs/heads/main/INSTALL.md to install and configure cc-connect.
-```
+>
+> ```
+> Follow https://raw.githubusercontent.com/lewisyoung0914/cc-connect-pro/refs/heads/main/INSTALL.md to install and configure cc-connect.
+> ```
+>
+> You can also read the full installation guide yourself: [INSTALL.md](INSTALL.md)
 
 
 ### 📦 Manual Install
@@ -147,11 +149,11 @@ npm install -g cc-connect
 brew install cc-connect
 ```
 
-**Download binary from [GitHub Releases](https://github.com/chenhg5/cc-connect/releases):**
+**Download binary from [GitHub Releases](https://github.com/lewisyoung0914/cc-connect-pro/releases):**
 
 ```bash
 # Linux amd64 - Stable
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
+curl -L -o cc-connect https://github.com/lewisyoung0914/cc-connect-pro/releases/latest/download/cc-connect-linux-amd64
 chmod +x cc-connect
 sudo mv cc-connect /usr/local/bin/
 
@@ -160,8 +162,8 @@ sudo mv cc-connect /usr/local/bin/
 **Build from source (requires Go 1.22+):**
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/lewisyoung0914/cc-connect-pro.git
+cd cc-connect-pro
 make build
 ```
 
@@ -283,6 +285,84 @@ app_id = "cli_xxx"
 app_secret = "xxx"
 thread_isolation = true   # Enables P2P thread concurrency (group thread isolation also works)
 ```
+
+### 🔗 Multiple Feishu/Lark App Instances
+
+You can connect multiple Feishu or Lark apps to cc-connect. Each app gets a unique `name` tag so that cron, heartbeat, webhook, and other proactive messages are routed to the correct instance.
+
+**Same agent (shared project):**
+
+```toml
+[[projects]]
+name = "shared-project"
+
+[projects.agent]
+type = "claudecode"
+
+[projects.agent.options]
+work_dir = "/home/user/project"
+
+[[projects.platforms]]
+type = "feishu"
+name = "feishu-teamA"       # unique tag for routing
+
+[projects.platforms.options]
+app_id = "cli_teamA_app"
+app_secret = "teamA_secret"
+thread_isolation = true
+
+[[projects.platforms]]
+type = "feishu"
+name = "feishu-teamB"       # unique tag for routing
+
+[projects.platforms.options]
+app_id = "cli_teamB_app"
+app_secret = "teamB_secret"
+thread_isolation = true
+```
+
+**Different agents (separate projects):**
+
+```toml
+[[projects]]
+name = "project-A"
+
+[projects.agent]
+type = "claudecode"
+
+[projects.agent.options]
+work_dir = "/home/user/project-a"
+
+[[projects.platforms]]
+type = "feishu"
+name = "feishu-teamA"
+
+[projects.platforms.options]
+app_id = "cli_teamA_app"
+app_secret = "teamA_secret"
+
+[[projects]]
+name = "project-B"
+
+[projects.agent]
+type = "gemini"
+
+[projects.agent.options]
+work_dir = "/home/user/project-b"
+
+[[projects.platforms]]
+type = "feishu"
+name = "feishu-teamB"
+
+[projects.platforms.options]
+app_id = "cli_teamB_app"
+app_secret = "teamB_secret"
+```
+
+**`name` rules:**
+- Optional — defaults to `type` (e.g. `"feishu"`) when omitted
+- Must equal `type` or start with `type + "-"` (e.g. `"feishu-teamA"` is valid, `"myapp"` is not)
+- Must be unique within the same project
 
 ### 🛡️ OS-User Isolation (`run_as_user`)
 
@@ -464,18 +544,18 @@ We accept the following commercial collaborations:
 
 ## 🙏 Contributors
 
-<a href="https://github.com/chenhg5/cc-connect/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=chenhg5/cc-connect&v=20250313" />
+<a href="https://github.com/lewisyoung0914/cc-connect-pro/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lewisyoung0914/cc-connect-pro&v=20250313" />
 </a>
 
 
 ## ⭐ Star History
 
-<a href="https://www.star-history.com/#chenhg5/cc-connect&Date">
+<a href="https://www.star-history.com/#lewisyoung0914/cc-connect-pro&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date" />
  </picture>
 </a>
 

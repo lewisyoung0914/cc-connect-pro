@@ -1,14 +1,16 @@
-# cc-connect Installation & Configuration Guide
+# cc-connect-pro Installation & Configuration Guide
 
-> **This document is designed to be read by AI coding agents (Claude Code, Cursor, Gemini CLI, etc.) to help users install and configure cc-connect.** You can feed this file directly to your AI agent.
+> **This document is designed to be read by AI coding agents (Claude Code, Cursor, Gemini CLI, etc.) to help users install and configure cc-connect-pro.** You can feed this file directly to your AI agent.
 
-## What is cc-connect?
+## What is cc-connect-pro?
 
-cc-connect bridges local AI coding assistants to messaging platforms (Feishu, DingTalk, Telegram, Slack, Discord, LINE, WeChat Work, QQ, **personal WeChat** via the **Weixin (ilink)** platform).
+cc-connect-pro is the Pro version of cc-connect, bridging local AI coding assistants to messaging platforms (Feishu, DingTalk, Telegram, Slack, Discord, LINE, WeChat Work, QQ, **personal WeChat** via the **Weixin (ilink)** platform).
 
-GitHub: https://github.com/chenhg5/cc-connect
+**Note:** The npm package is published as `cc-connect-pro`, but the CLI command after installation is still `cc-connect`.
 
-**IMPORTANT: If you are an AI agent helping a user install cc-connect, use interactive tools (like AskUserQuestion) to guide them through configuration choices:**
+GitHub: https://github.com/lewisyoung0914/cc-connect-pro
+
+**IMPORTANT: If you are an AI agent helping a user install cc-connect-pro, use interactive tools (like AskUserQuestion) to guide them through configuration choices:**
 - Agent selection (Claude Code, Cursor, Gemini, etc.)
 - Platform selection (Feishu, Telegram, Discord, etc.)
 - API keys and authentication tokens
@@ -16,26 +18,20 @@ GitHub: https://github.com/chenhg5/cc-connect
 
 Don't guess values—always ask the user to choose via interactive prompts.
 
-## Step 1: Install cc-connect
+## Step 1: Install cc-connect-pro
 
 ### Option A: npm (recommended for most users)
 
 ```bash
-npm install -g cc-connect
+npm install -g cc-connect-pro
 ```
 
-After installation, the `cc-connect` binary will be available globally.
+After installation, the `cc-connect` command will be available globally (the npm package name is `cc-connect-pro`, but the CLI command is `cc-connect`).
 
 
-### Option B: Homebrew (macOS / Linux)
+### Option B: Download binary from GitHub Releases
 
-```bash
-brew install cc-connect
-```
-
-### Option C: Download binary from GitHub Releases
-
-Go to https://github.com/chenhg5/cc-connect/releases and download the binary for your platform.
+Go to https://github.com/lewisyoung0914/cc-connect-pro/releases and download the binary for your platform.
 
 Typical artifact names (check the release page for exact filenames):
 
@@ -45,7 +41,7 @@ Typical artifact names (check the release page for exact filenames):
 
 ```bash
 # Example for Linux amd64 (replace URL with the asset link from the release you chose):
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
+curl -L -o cc-connect https://github.com/lewisyoung0914/cc-connect-pro/releases/latest/download/cc-connect-linux-amd64
 chmod +x cc-connect
 sudo mv cc-connect /usr/local/bin/
 ```
@@ -56,13 +52,13 @@ On macOS, you may need to remove the quarantine attribute:
 xattr -d com.apple.quarantine cc-connect
 ```
 
-### Option D: Build from source
+### Option C: Build from source
 
 Requires Go 1.22+.
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/lewisyoung0914/cc-connect-pro.git
+cd cc-connect-pro
 make build
 # Binary will be at ./cc-connect
 ```
@@ -682,23 +678,23 @@ cc-connect --version
 ### npm users
 
 ```bash
-npm update -g cc-connect
+npm update -g cc-connect-pro
 ```
 
 ### Binary users
 
-Check the latest release at https://github.com/chenhg5/cc-connect/releases and compare with your local version. To upgrade:
+Check the latest release at https://github.com/lewisyoung0914/cc-connect-pro/releases and compare with your local version. To upgrade:
 
 ```bash
 # Linux/macOS — replace with your platform suffix
-curl -L -o /usr/local/bin/cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+curl -L -o /usr/local/bin/cc-connect https://github.com/lewisyoung0914/cc-connect-pro/releases/latest/download/cc-connect-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
 chmod +x /usr/local/bin/cc-connect
 ```
 
 ### Source users
 
 ```bash
-cd cc-connect
+cd cc-connect-pro
 git pull
 make build
 ```

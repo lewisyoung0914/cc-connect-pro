@@ -1275,7 +1275,7 @@ func bootstrapConfig(path string) error {
 	}
 
 	const tmpl = `# cc-connect configuration
-# Docs: https://github.com/chenhg5/cc-connect
+# Docs: https://github.com/lewisyoung0914/cc-connect-pro
 
 [log]
 level = "info"
@@ -1302,7 +1302,7 @@ app_id = "your-feishu-app-id"
 app_secret = "your-feishu-app-secret"
 
 # For more platforms (DingTalk, Telegram, Slack, Discord, LINE, WeChat Work)
-# see: https://github.com/chenhg5/cc-connect/blob/main/config.example.toml
+# see: https://github.com/lewisyoung0914/cc-connect-pro/blob/main/config.example.toml
 `
 	return os.WriteFile(path, []byte(tmpl), 0o644)
 }
@@ -1317,18 +1317,18 @@ func printUsage() {
 	updateHint := getUpdateHintIfAvailable()
 
 	fmt.Fprintf(os.Stderr, `
-                                              _
-  ___ ___        ___ ___  _ __  _ __   ___  ___| |_
- / __/ __|_____ / __/ _ \| '_ \| '_ \ / _ \/ __| __|
-| (_| (_|_____|  (_| (_) | | | | | | |  __/ (__| |_
- \___\__|      \___\___/|_| |_|_| |_|\___|\___|\__|  %s%s
+                                                _          ___     ___      ___
+  ___ ___        ___ ___  _ __  _ __   ___  ___| |_       |  _ \  |  _ \   / _ \ 
+ / __/ __|_____ / __/ _ \| '_ \| '_ \ / _ \/ __| __|_____ | |_| | | |_| | | | | |
+| (_| (_|_____|  (_| (_) | | | | | | |  __/ (__| |_ _____ |  _ /  | |\ \  | |_| | 
+ \___\__|       \___\___/|_| |_|_| |_|\___|\___|\__|      |_|     |_| \_\  \___/  %s%s
 
   Bridge your messaging platforms to local AI coding agents.
   Supports: Claude Code, Codex, Cursor, Gemini CLI, Qoder CLI, OpenCode
   Platforms: Feishu, Telegram, Slack, DingTalk, Discord, LINE, WeChat Work, Weixin, QQ, QQ Bot
 
-  GitHub:  https://github.com/chenhg5/cc-connect
-  Docs:    https://github.com/chenhg5/cc-connect/blob/main/INSTALL.md
+  GitHub:  https://github.com/lewisyoung0914/cc-connect-pro
+  Docs:    https://github.com/lewisyoung0914/cc-connect-pro/blob/main/INSTALL.md
 
 Usage:
   cc-connect [flags]

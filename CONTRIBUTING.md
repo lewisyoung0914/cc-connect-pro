@@ -2,12 +2,12 @@
 
 [中文](#为-cc-connect-做贡献) | [English](#contributing-to-cc-connect)
 
-Thank you for using cc-connect and for every issue, pull request, and piece of feedback that helps improve it. This guide turns the contributor welcome note from [#295](https://github.com/chenhg5/cc-connect/issues/295) into a permanent repo document.
+Thank you for using cc-connect and for every issue, pull request, and piece of feedback that helps improve it. This guide turns the contributor welcome note from [#295](https://github.com/lewisyoung0914/cc-connect-pro/issues/295) into a permanent repo document.
 
 ## Before You Open An Issue Or PR
 
 1. Search first.
-Check [Issues](https://github.com/chenhg5/cc-connect/issues) and [Pull requests](https://github.com/chenhg5/cc-connect/pulls) for duplicates or related discussion before starting new work.
+Check [Issues](https://github.com/lewisyoung0914/cc-connect-pro/issues) and [Pull requests](https://github.com/lewisyoung0914/cc-connect-pro/pulls) for duplicates or related discussion before starting new work.
 
 2. Try the latest beta.
 Many bugs are fixed in beta or pre-release builds before they reach stable. Please retry on the latest beta first when possible.
@@ -43,7 +43,7 @@ go test ./...
 - Beta / pre-release: roughly every 2 to 3 days
 - Stable: roughly every 2 weeks
 
-Always treat the [GitHub Releases](https://github.com/chenhg5/cc-connect/releases) page as the source of truth.
+Always treat the [GitHub Releases](https://github.com/lewisyoung0914/cc-connect-pro/releases) page as the source of truth.
 
 ## Community
 
@@ -58,12 +58,12 @@ Commercial support, custom work, or enterprise inquiries can go through the same
 
 # 为 cc-connect 做贡献
 
-感谢你使用 cc-connect，也感谢你通过 issue、PR 和反馈帮助项目持续改进。这份文档把 [#295](https://github.com/chenhg5/cc-connect/issues/295) 里的欢迎与参与指南正式沉淀到仓库中。
+感谢你使用 cc-connect，也感谢你通过 issue、PR 和反馈帮助项目持续改进。这份文档把 [#295](https://github.com/lewisyoung0914/cc-connect-pro/issues/295) 里的欢迎与参与指南正式沉淀到仓库中。
 
 ## 提交 Issue 或 PR 之前
 
 1. 先搜索。
-先查看 [Issues](https://github.com/chenhg5/cc-connect/issues) 和 [Pull requests](https://github.com/chenhg5/cc-connect/pulls)，避免重复劳动，也方便在已有讨论里继续跟进。
+先查看 [Issues](https://github.com/lewisyoung0914/cc-connect-pro/issues) 和 [Pull requests](https://github.com/lewisyoung0914/cc-connect-pro/pulls)，避免重复劳动，也方便在已有讨论里继续跟进。
 
 2. 先试最新 beta。
 很多问题会先在 beta / 预发布版本中修复。如果条件允许，建议先在最新 beta 上复现一次。
@@ -99,7 +99,7 @@ go test ./...
 - Beta / 预发布：大约每 2 到 3 天一次
 - 稳定版：大约每 2 周一次
 
-请以 [GitHub Releases](https://github.com/chenhg5/cc-connect/releases) 页面为准。
+请以 [GitHub Releases](https://github.com/lewisyoung0914/cc-connect-pro/releases) 页面为准。
 
 ## 社区
 

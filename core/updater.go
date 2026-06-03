@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	githubReleasesAPI = "https://api.github.com/repos/chenhg5/cc-connect/releases"
+	githubReleasesAPI = "https://api.github.com/repos/lewisyoung0914/cc-connect-pro/releases"
 	giteeReleasesAPI  = "https://gitee.com/api/v5/repos/cg33/cc-connect/releases"
-	githubDownload    = "https://github.com/chenhg5/cc-connect/releases/download"
+	githubDownload    = "https://github.com/lewisyoung0914/cc-connect-pro/releases/download"
 	giteeDownload     = "https://gitee.com/cg33/cc-connect/releases/download"
 )
 

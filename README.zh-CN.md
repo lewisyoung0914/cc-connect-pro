@@ -28,7 +28,7 @@
 - **全局服务商管理** — 在 Web UI 中添加/编辑/删除 Provider，支持从 cc-switch 配置导入。
 - **个人微信** — 用 **微信个人号（ilink 长轮询）** 和本地 Agent 对话；支持扫码 `weixin setup`、CDN 收发图片/文件，**无需公网 IP**。*[接入说明 → `docs/weixin.md`](docs/weixin.md)*
 - **微博私信** — 通过 **微博私信** 与 Agent 对话，WebSocket 连接，无需公网 IP，支持流式文本回复。
-- **飞书增强** — 自动解析 `@成员` 提及、多级回复链识别、完成 Emoji 反应。新增 `thread_isolation` 私聊并发多任务：每条新消息启动独立线程，回复 bot 消息继续同一任务，多个线程并发运行互不阻塞。
+- **飞书增强** — 自动解析 `@成员` 提及、多级回复链识别、完成 Emoji 反应。新增 `thread_isolation` 私聊并发多任务：每条新消息启动独立线程，回复 bot 消息继续同一任务，多个线程并发运行互不阻塞。**多飞书应用支持** — 可接入多个飞书/Lark 应用到同一个或不同的 Agent；每个应用通过独立的 `name` 标识，确保定时任务、心跳、Webhook 等主动消息正确路由到对应实例。
 - **新增 Agent** — 支持 Kimi CLI 和 Pi agent。
 
 
@@ -108,10 +108,12 @@
 ### 🤖 通过 AI Agent 安装配置（推荐）
 
 > **最简单的方式** — 把这段话发给 Claude Code 或其他 AI 编码 Agent，它会帮你完成整个安装和配置过程：
-
-```bash
-请参考 https://raw.githubusercontent.com/chenhg5/cc-connect/refs/heads/main/INSTALL.md 帮我安装和配置 cc-connect
-```
+>
+> ```
+> 请参考 https://raw.githubusercontent.com/lewisyoung0914/cc-connect-pro/refs/heads/main/INSTALL.md 帮我安装和配置 cc-connect
+> ```
+>
+> 你也可以直接阅读完整安装指南：[INSTALL.md](INSTALL.md)
 
 
 ### 📦 手动安装
@@ -128,11 +130,11 @@
 brew install cc-connect
 ```
 
-**从 [GitHub Releases](https://github.com/chenhg5/cc-connect/releases) 下载：**
+**从 [GitHub Releases](https://github.com/lewisyoung0914/cc-connect-pro/releases) 下载：**
 
 ```bash
 # Linux amd64 - 稳定版
-curl -L -o cc-connect https://github.com/chenhg5/cc-connect/releases/latest/download/cc-connect-linux-amd64
+curl -L -o cc-connect https://github.com/lewisyoung0914/cc-connect-pro/releases/latest/download/cc-connect-linux-amd64
 chmod +x cc-connect
 sudo mv cc-connect /usr/local/bin/
 
@@ -141,8 +143,8 @@ sudo mv cc-connect /usr/local/bin/
 **从源码编译（需要 Go 1.22+）：**
 
 ```bash
-git clone https://github.com/chenhg5/cc-connect.git
-cd cc-connect
+git clone https://github.com/lewisyoung0914/cc-connect-pro.git
+cd cc-connect-pro
 make build
 ```
 
@@ -262,6 +264,84 @@ app_id = “cli_xxx”
 app_secret = “xxx”
 thread_isolation = true   # 私聊线程并发（群聊话题线程也同时生效）
 ```
+
+### 🔗 多飞书/Lark 应用接入
+
+你可以将多个飞书或 Lark 应用接入 cc-connect。每个应用通过独立的 `name` 标识，确保定时任务、心跳、Webhook 等主动消息正确路由到对应实例。
+
+**同一 Agent（共享项目）：**
+
+```toml
+[[projects]]
+name = “shared-project”
+
+[projects.agent]
+type = “claudecode”
+
+[projects.agent.options]
+work_dir = “/home/user/project”
+
+[[projects.platforms]]
+type = “feishu”
+name = “feishu-teamA”       # 路由标识，项目内唯一
+
+[projects.platforms.options]
+app_id = “cli_teamA_app”
+app_secret = “teamA_secret”
+thread_isolation = true
+
+[[projects.platforms]]
+type = “feishu”
+name = “feishu-teamB”       # 路由标识，项目内唯一
+
+[projects.platforms.options]
+app_id = “cli_teamB_app”
+app_secret = “teamB_secret”
+thread_isolation = true
+```
+
+**不同 Agent（独立项目）：**
+
+```toml
+[[projects]]
+name = “project-A”
+
+[projects.agent]
+type = “claudecode”
+
+[projects.agent.options]
+work_dir = “/home/user/project-a”
+
+[[projects.platforms]]
+type = “feishu”
+name = “feishu-teamA”
+
+[projects.platforms.options]
+app_id = “cli_teamA_app”
+app_secret = “teamA_secret”
+
+[[projects]]
+name = “project-B”
+
+[projects.agent]
+type = “gemini”
+
+[projects.agent.options]
+work_dir = “/home/user/project-b”
+
+[[projects.platforms]]
+type = “feishu”
+name = “feishu-teamB”
+
+[projects.platforms.options]
+app_id = “cli_teamB_app”
+app_secret = “teamB_secret”
+```
+
+**`name` 规则：**
+- 可选 — 不填时默认等于 `type`（如 `”feishu”`）
+- 必须等于 `type` 或以 `type + “-”` 开头（如 `”feishu-teamA”` 合法，`”myapp”` 不合法）
+- 同一项目内必须唯一
 
 
 ### 🛡️ 系统用户隔离 (`run_as_user`)
@@ -434,18 +514,18 @@ cc-connect send --file /absolute/path/to/report.pdf --image /absolute/path/to/ch
 
 ## 🙏 贡献者
 
-<a href="https://github.com/chenhg5/cc-connect/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=chenhg5/cc-connect&v=20250313" />
+<a href="https://github.com/lewisyoung0914/cc-connect-pro/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lewisyoung0914/cc-connect-pro&v=20250313" />
 </a>
 
 
 ## ⭐ Star History
 
-<a href="https://www.star-history.com/#chenhg5/cc-connect&Date">
+<a href="https://www.star-history.com/#lewisyoung0914/cc-connect-pro&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=chenhg5/cc-connect&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=lewisyoung0914/cc-connect-pro&type=Date" />
  </picture>
 </a>
 
