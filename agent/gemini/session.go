@@ -39,6 +39,9 @@ type geminiSession struct {
 	alive    atomic.Bool
 
 	pendingMsgs []string // buffered assistant messages awaiting classification
+
+	turnMu      sync.Mutex
+	turnCancel  context.CancelFunc // per-turn cancel for Interrupt()
 }
 
 func newGeminiSession(ctx context.Context, cmd, workDir, model, mode, resumeID string, extraEnv []string, timeout time.Duration) (*geminiSession, error) {
@@ -168,6 +171,10 @@ func (gs *geminiSession) Send(prompt string, images []core.ImageAttachment, file
 		}
 	}()
 
+	gs.turnMu.Lock()
+	gs.turnCancel = cancel
+	gs.turnMu.Unlock()
+
 	slog.Debug("geminiSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 	cmd := exec.CommandContext(ctx, gs.cmd, args...)
 	// Set a short WaitDelay to ensure I/O goroutines don't block for long after the context is done
@@ -205,6 +212,9 @@ func (gs *geminiSession) Send(prompt string, images []core.ImageAttachment, file
 func (gs *geminiSession) readLoop(ctx context.Context, cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer, tempImages []string) {
 	defer gs.wg.Done()
 	defer func() {
+		gs.turnMu.Lock()
+		gs.turnCancel = nil
+		gs.turnMu.Unlock()
 		// Clean up temp image files
 		for _, f := range tempImages {
 			os.Remove(f)
@@ -469,6 +479,30 @@ func (gs *geminiSession) CurrentSessionID() string {
 
 func (gs *geminiSession) Alive() bool {
 	return gs.alive.Load()
+}
+
+func (gs *geminiSession) Interrupt() error {
+	if !gs.alive.Load() {
+		return fmt.Errorf("gemini: session not alive")
+	}
+
+	gs.turnMu.Lock()
+	cancel := gs.turnCancel
+	gs.turnMu.Unlock()
+
+	if cancel == nil {
+		return nil
+	}
+
+	cancel()
+
+	sid, _ := gs.chatID.Load().(string)
+	select {
+	case gs.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-gs.ctx.Done():
+	}
+
+	return nil
 }
 
 func (gs *geminiSession) Close() error {
