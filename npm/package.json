@@ -1,6 +1,6 @@
 {
   "name": "cc-connect-pro",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "A pro version of cc-connect. Bridge local AI coding agents (Claude Code, Cursor, Gemini CLI) to messaging platforms (Feishu, DingTalk, Slack, Telegram, Discord, LINE, WeChat Work)",
   "keywords": [
     "claude-code",

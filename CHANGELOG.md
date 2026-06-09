@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0-beta.3 (2026-06-09)
+
+### New Features
+- **/stop interrupt without terminating**: the `/stop` command now interrupts the current agent turn while preserving the session context. The next message continues in the same conversation instead of starting a new one.
+  - New `Interrupter` optional interface in `core/` — agents opt in by implementing `Interrupt()`
+  - `cmdStop` first tries `Interrupt()`, falls back to full termination if the agent doesn't support it
+  - Second `/stop` after an interrupt escalates to force terminate
+  - All 14 agents implement `Interrupter` with strategies tailored to their process model:
+    - **Long-lived agents** (Claude Code: SIGINT, ACP/Devin: kill+restart+session/load, Copilot: stdin close+restart+session.resume, Tmux: send-keys C-c)
+    - **Per-turn agents** (Codex, Gemini, Cursor, OpenCode, iFlow, Kimi, Pi, Qoder, Antigravity: cancel current turn, emit synthetic EventResult, session survives)
+  - New i18n messages: `MsgExecutionInterrupted` ("执行已中断") and `MsgInterruptFailed` ("中断失败，会话已终止")
+
+### Previous Releases
+
 ### New Features
 - **QQ Bot inline keyboard**: add support for inline keyboard buttons and INTERACTION_CREATE events. Permission requests now render as clickable buttons instead of text replies. Requires enabling the INTERACTION capability (bit 26) in the QQ Open Platform bot settings.
 
