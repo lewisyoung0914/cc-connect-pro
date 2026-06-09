@@ -702,6 +702,24 @@ func (cs *claudeSession) Alive() bool {
 	return cs.alive.Load()
 }
 
+// Interrupt sends SIGINT to the process group. Claude Code CLI interprets
+// SIGINT as "cancel current generation" and keeps the process running for
+// further input, unlike Close() which terminates the process entirely.
+func (cs *claudeSession) Interrupt() error {
+	cs.stdinMu.Lock()
+	defer cs.stdinMu.Unlock()
+
+	if !cs.alive.Load() {
+		return fmt.Errorf("claudecode: session not alive")
+	}
+
+	err := signalProcessGroup(cs.cmd, syscall.SIGINT)
+	if err != nil {
+		return fmt.Errorf("claudecode: interrupt: %w", err)
+	}
+	return nil
+}
+
 func (cs *claudeSession) Close() error {
 	// Phase 1: Close stdin to signal EOF. Claude Code exits cleanly on
 	// stdin close, running Stop hooks (e.g. claude-mem session summary).
