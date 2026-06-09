@@ -34,6 +34,9 @@ type cursorSession struct {
 	wg       sync.WaitGroup
 	alive    atomic.Bool
 
+	turnMu     sync.Mutex
+	turnCancel context.CancelFunc // per-turn cancel for Interrupt()
+
 	thinkingBuf strings.Builder // accumulate thinking deltas
 }
 
@@ -98,7 +101,12 @@ func (cs *cursorSession) Send(prompt string, images []core.ImageAttachment, file
 
 	slog.Debug("cursorSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 
-	cmd := exec.CommandContext(cs.ctx, cs.cmd, args...)
+	turnCtx, turnCancel := context.WithCancel(cs.ctx)
+	cs.turnMu.Lock()
+	cs.turnCancel = turnCancel
+	cs.turnMu.Unlock()
+
+	cmd := exec.CommandContext(turnCtx, cs.cmd, args...)
 	cmd.Dir = cs.workDir
 	env := os.Environ()
 	if len(cs.extraEnv) > 0 {
@@ -126,6 +134,11 @@ func (cs *cursorSession) Send(prompt string, images []core.ImageAttachment, file
 
 func (cs *cursorSession) readLoop(cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer cs.wg.Done()
+	defer func() {
+		cs.turnMu.Lock()
+		cs.turnCancel = nil
+		cs.turnMu.Unlock()
+	}()
 	defer func() {
 		if err := cmd.Wait(); err != nil {
 			stderrMsg := strings.TrimSpace(stderrBuf.String())
@@ -437,6 +450,28 @@ func (cs *cursorSession) handleResult(raw map[string]any) {
 
 // RespondPermission is a no-op — Cursor Agent permissions are handled via CLI default behavior or --force flag.
 func (cs *cursorSession) RespondPermission(_ string, _ core.PermissionResult) error {
+	return nil
+}
+
+// Interrupt cancels the current per-turn context, killing the running
+// Cursor process without destroying the session. The next Send() will
+// resume the conversation using --resume with the stored chatID.
+func (cs *cursorSession) Interrupt() error {
+	if !cs.alive.Load() {
+		return fmt.Errorf("cursor: session not alive")
+	}
+	cs.turnMu.Lock()
+	cancel := cs.turnCancel
+	cs.turnMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	sid, _ := cs.chatID.Load().(string)
+	select {
+	case cs.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-cs.ctx.Done():
+	}
 	return nil
 }
 
