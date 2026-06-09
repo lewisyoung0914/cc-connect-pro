@@ -38,6 +38,9 @@ type kimiSession struct {
 	alive     atomic.Bool
 
 	pendingMsgs []string // buffered assistant text messages
+
+	turnMu      sync.Mutex
+	turnCancel  context.CancelFunc // per-turn cancel for Interrupt()
 }
 
 func newKimiSession(ctx context.Context, cmd, workDir, model, mode, resumeID string, extraEnv []string, timeout time.Duration) (*kimiSession, error) {
@@ -162,6 +165,10 @@ func (ks *kimiSession) Send(prompt string, images []core.ImageAttachment, files 
 		}
 	}()
 
+	ks.turnMu.Lock()
+	ks.turnCancel = cancel
+	ks.turnMu.Unlock()
+
 	slog.Debug("kimiSession: launching", "resume", sid != "", "args", core.RedactArgs(args))
 	cmd := exec.CommandContext(ctx, ks.cmd, args...)
 	cmd.WaitDelay = 1 * time.Second
@@ -197,6 +204,9 @@ func (ks *kimiSession) Send(prompt string, images []core.ImageAttachment, files 
 func (ks *kimiSession) readLoop(ctx context.Context, cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer, tempFiles []string) {
 	defer ks.wg.Done()
 	defer func() {
+		ks.turnMu.Lock()
+		ks.turnCancel = nil
+		ks.turnMu.Unlock()
 		for _, f := range tempFiles {
 			os.Remove(f)
 		}
@@ -449,6 +459,30 @@ func (ks *kimiSession) CurrentSessionID() string {
 
 func (ks *kimiSession) Alive() bool {
 	return ks.alive.Load()
+}
+
+func (ks *kimiSession) Interrupt() error {
+	if !ks.alive.Load() {
+		return fmt.Errorf("kimi: session not alive")
+	}
+
+	ks.turnMu.Lock()
+	cancel := ks.turnCancel
+	ks.turnMu.Unlock()
+
+	if cancel == nil {
+		return nil
+	}
+
+	cancel()
+
+	sid, _ := ks.sessionID.Load().(string)
+	select {
+	case ks.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-ks.ctx.Done():
+	}
+
+	return nil
 }
 
 func (ks *kimiSession) Close() error {
