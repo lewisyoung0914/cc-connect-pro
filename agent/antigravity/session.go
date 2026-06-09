@@ -39,6 +39,8 @@ type antigravitySession struct {
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 	alive     atomic.Bool
+	turnMu    sync.Mutex
+	turnCancel context.CancelFunc // per-turn cancel for Interrupt()
 }
 
 var permissionPromptPattern = regexp.MustCompile(`(?is)(allow|approve|permission).{0,400}(\(y/n\)|\(y\/n\)|\(y\/N\)|\(Y\/n\)|\[y\/n\]|\[y\/N\]|\[Y\/n\]|yes\/no)`)
@@ -159,6 +161,10 @@ func (as *antigravitySession) Send(prompt string, images []core.ImageAttachment,
 		}
 	}()
 
+	as.turnMu.Lock()
+	as.turnCancel = cancel
+	as.turnMu.Unlock()
+
 	slog.Debug("antigravitySession: launching", "resume", isResume, "args", core.RedactArgs(args))
 	cmd := exec.CommandContext(ctx, as.cmd, args...)
 	cmd.WaitDelay = 1 * time.Second
@@ -223,6 +229,11 @@ func usesInteractivePermission(mode string) bool {
 
 func (as *antigravitySession) readLoop(ctx context.Context, cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer, tempFiles []string, preEntries map[string]bool, sendStartedAt time.Time) {
 	defer as.wg.Done()
+	defer func() {
+		as.turnMu.Lock()
+		as.turnCancel = nil
+		as.turnMu.Unlock()
+	}()
 	defer func() {
 		for _, f := range tempFiles {
 			_ = os.Remove(f)
@@ -447,6 +458,31 @@ func (as *antigravitySession) CurrentSessionID() string {
 
 func (as *antigravitySession) Alive() bool {
 	return as.alive.Load()
+}
+
+func (as *antigravitySession) Interrupt() error {
+	if !as.alive.Load() {
+		return fmt.Errorf("antigravity: session not alive")
+	}
+	as.turnMu.Lock()
+	cancel := as.turnCancel
+	as.turnMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	as.stdinMu.Lock()
+	if as.stdin != nil {
+		as.stdin.Close()
+		as.stdin = nil
+	}
+	as.stdinMu.Unlock()
+	sid, _ := as.chatID.Load().(string)
+	select {
+	case as.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-as.ctx.Done():
+	}
+	return nil
 }
 
 func (as *antigravitySession) Close() error {
