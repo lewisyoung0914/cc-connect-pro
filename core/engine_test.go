@@ -6219,6 +6219,7 @@ func TestSessionIDWriteback_DoesNotOverwriteExisting(t *testing.T) {
 // to resume the killed session (issue #830).
 func TestCmdStop_ClearsAgentSessionID(t *testing.T) {
 	sess := newControllableSession("agent-1")
+	sess.interruptErr = fmt.Errorf("not supported") // force fallback to termination
 	agent := &controllableAgent{nextSession: sess}
 	p := &stubPlatformEngine{n: "test"}
 	e := NewEngine("test", agent, []Platform{p}, "", LangEnglish)
@@ -8463,6 +8464,7 @@ func TestExecuteCardAction_StopClearsInteractiveState(t *testing.T) {
 func TestCmdStop_ReturnsWhileCloseBlockedAndStopsEventLoop(t *testing.T) {
 	p := &stubPlatformEngine{n: "test"}
 	sess := newBlockingCloseSession("stop-blocked")
+	sess.controllableAgentSession.interruptErr = fmt.Errorf("not supported") // force fallback to termination
 	e := NewEngine("test", &stubAgent{}, []Platform{p}, "", LangEnglish)
 	key := "test:user1"
 	session := e.sessions.GetOrCreateActive(key)
@@ -8518,8 +8520,8 @@ func TestCmdStop_ReturnsWhileCloseBlockedAndStopsEventLoop(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	sent := p.getSent()
-	if len(sent) != 1 || sent[0] != e.i18n.T(MsgExecutionStopped) {
-		t.Fatalf("sent messages = %v, want only execution stopped", sent)
+	if len(sent) != 1 || sent[0] != e.i18n.T(MsgInterruptFailed) {
+		t.Fatalf("sent messages = %v, want only interrupt failed", sent)
 	}
 
 	close(sess.releaseClose)
@@ -8747,6 +8749,7 @@ func TestCmdStatus_UsesInteractiveKeyForMultiWorkspace(t *testing.T) {
 func TestCmdStop_UsesInteractiveKeyForMultiWorkspace(t *testing.T) {
 	p := &stubPlatformEngine{n: "test"}
 	sess := newControllableSession("ws-stop-test")
+	sess.interruptErr = fmt.Errorf("not supported") // force fallback to termination
 	e := NewEngine("test", &stubAgent{}, []Platform{p}, "", LangEnglish)
 
 	wsDir := t.TempDir()
