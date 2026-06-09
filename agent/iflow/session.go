@@ -54,6 +54,8 @@ type iflowSession struct {
 	wg             sync.WaitGroup
 	alive          atomic.Bool
 	turnActive     atomic.Bool
+	currentTurn    *iflowTurn
+	currentTurnMu  sync.Mutex
 }
 
 type iflowTurn struct {
@@ -144,6 +146,10 @@ func (s *iflowSession) Send(prompt string, images []core.ImageAttachment, files 
 		doneToolIDs:    make(map[string]struct{}),
 	}
 
+	s.currentTurnMu.Lock()
+	s.currentTurn = turn
+	s.currentTurnMu.Unlock()
+
 	defer func() {
 		if !s.turnActive.Load() {
 			turnCancel()
@@ -210,6 +216,11 @@ func (s *iflowSession) readLoop(turn *iflowTurn, cmd *exec.Cmd, ptmx *os.File) {
 	defer s.turnActive.Store(false)
 	defer turn.cancel()
 	defer ptmx.Close()
+	defer func() {
+		s.currentTurnMu.Lock()
+		s.currentTurn = nil
+		s.currentTurnMu.Unlock()
+	}()
 
 	var termBuf bytes.Buffer
 	drainDone := make(chan struct{})
@@ -868,6 +879,25 @@ func summarizeIFlowError(stderrText string, waitErr error) error {
 		return fmt.Errorf("iflow process failed: %w", waitErr)
 	}
 	return fmt.Errorf("iflow API request failed")
+}
+
+func (s *iflowSession) Interrupt() error {
+	if !s.alive.Load() {
+		return fmt.Errorf("iflow: session not alive")
+	}
+	s.currentTurnMu.Lock()
+	turn := s.currentTurn
+	s.currentTurnMu.Unlock()
+	if turn == nil {
+		return nil
+	}
+	turn.cancel()
+	sid, _ := s.sessionID.Load().(string)
+	select {
+	case s.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-s.ctx.Done():
+	}
+	return nil
 }
 
 func (s *iflowSession) RespondPermission(_ string, _ core.PermissionResult) error {
