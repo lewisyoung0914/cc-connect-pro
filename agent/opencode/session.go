@@ -37,6 +37,9 @@ type opencodeSession struct {
 	alive             atomic.Bool
 	expectingContinue atomic.Bool // true when compaction_continue received, waiting for next step
 	resultSent        atomic.Bool // true when EventResult has been sent for this turn
+
+	turnMu     sync.Mutex
+	turnCancel context.CancelFunc // per-turn cancel for Interrupt()
 }
 
 func newOpencodeSession(ctx context.Context, cmd, workDir, model, mode, resumeID string, extraEnv []string) (*opencodeSession, error) {
@@ -84,7 +87,12 @@ func (s *opencodeSession) Send(prompt string, images []core.ImageAttachment, fil
 
 	slog.Debug("opencodeSession: launching", "resume", isResume, "args", core.RedactArgs(args))
 
-	cmd := exec.CommandContext(s.ctx, s.cmd, args...)
+	turnCtx, turnCancel := context.WithCancel(s.ctx)
+	s.turnMu.Lock()
+	s.turnCancel = turnCancel
+	s.turnMu.Unlock()
+
+	cmd := exec.CommandContext(turnCtx, s.cmd, args...)
 	cmd.Dir = s.workDir
 	env := os.Environ()
 	if len(s.extraEnv) > 0 {
@@ -186,6 +194,11 @@ func (s *opencodeSession) buildRunArgs(prompt string, imagePaths []string, chatI
 
 func (s *opencodeSession) readLoop(cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer s.wg.Done()
+	defer func() {
+		s.turnMu.Lock()
+		s.turnCancel = nil
+		s.turnMu.Unlock()
+	}()
 	defer func() { _ = cmd.Wait() }()
 
 	scanner := bufio.NewScanner(stdout)
@@ -483,6 +496,28 @@ func (s *opencodeSession) sendEventResult() {
 
 // RespondPermission is a no-op — OpenCode handles permissions internally.
 func (s *opencodeSession) RespondPermission(_ string, _ core.PermissionResult) error {
+	return nil
+}
+
+// Interrupt cancels the current per-turn context, killing the running
+// OpenCode process without destroying the session. The next Send() will
+// resume the conversation using --session with the stored chatID.
+func (s *opencodeSession) Interrupt() error {
+	if !s.alive.Load() {
+		return fmt.Errorf("opencode: session not alive")
+	}
+	s.turnMu.Lock()
+	cancel := s.turnCancel
+	s.turnMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	sid, _ := s.chatID.Load().(string)
+	select {
+	case s.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-s.ctx.Done():
+	}
 	return nil
 }
 
