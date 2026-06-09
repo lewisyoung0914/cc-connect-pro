@@ -33,6 +33,9 @@ type qoderSession struct {
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 	alive     atomic.Bool
+
+	turnMu     sync.Mutex
+	turnCancel context.CancelFunc // per-turn cancel for Interrupt()
 }
 
 func newQoderSession(ctx context.Context, workDir, model, mode, resumeID string, extraEnv []string) (*qoderSession, error) {
@@ -85,7 +88,12 @@ func (qs *qoderSession) Send(prompt string, images []core.ImageAttachment, files
 
 	slog.Debug("qoderSession: launching", "resume", sid != "", "args_len", len(args))
 
-	cmd := exec.CommandContext(qs.ctx, "qodercli", args...)
+	turnCtx, turnCancel := context.WithCancel(qs.ctx)
+	qs.turnMu.Lock()
+	qs.turnCancel = turnCancel
+	qs.turnMu.Unlock()
+
+	cmd := exec.CommandContext(turnCtx, "qodercli", args...)
 	cmd.Dir = qs.workDir
 	if len(qs.extraEnv) > 0 {
 		cmd.Env = core.MergeEnv(os.Environ(), qs.extraEnv)
@@ -111,6 +119,11 @@ func (qs *qoderSession) Send(prompt string, images []core.ImageAttachment, files
 
 func (qs *qoderSession) readLoop(cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer qs.wg.Done()
+	defer func() {
+		qs.turnMu.Lock()
+		qs.turnCancel = nil
+		qs.turnMu.Unlock()
+	}()
 
 	var gotResult bool
 	var nonJSONLines []string
@@ -318,6 +331,28 @@ func (qs *qoderSession) handleResult(ev *streamEvent) {
 }
 
 func (qs *qoderSession) RespondPermission(_ string, _ core.PermissionResult) error {
+	return nil
+}
+
+// Interrupt cancels the current per-turn context, killing the running
+// Qoder process without destroying the session. The next Send() will
+// resume the conversation using -r with the stored sessionID.
+func (qs *qoderSession) Interrupt() error {
+	if !qs.alive.Load() {
+		return fmt.Errorf("qoder: session not alive")
+	}
+	qs.turnMu.Lock()
+	cancel := qs.turnCancel
+	qs.turnMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	sid, _ := qs.sessionID.Load().(string)
+	select {
+	case qs.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-qs.ctx.Done():
+	}
 	return nil
 }
 
