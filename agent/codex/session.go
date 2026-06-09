@@ -832,6 +832,29 @@ func (cs *codexSession) refreshContextUsageFromRollout() {
 	}
 }
 
+func (cs *codexSession) Interrupt() error {
+	if !cs.alive.Load() {
+		return fmt.Errorf("codex: session not alive")
+	}
+
+	active := cs.activeCmds()
+	if len(active) == 0 {
+		return nil
+	}
+
+	if err := forceKillAllCmds(active); err != nil {
+		slog.Debug("codex: Interrupt: forceKillAllCmds error", "error", err)
+	}
+
+	sid := cs.CurrentSessionID()
+	select {
+	case cs.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-cs.ctx.Done():
+	}
+
+	return nil
+}
+
 func (cs *codexSession) Close() error {
 	cs.alive.Store(false)
 	cs.cancel()
