@@ -38,6 +38,9 @@ type piSession struct {
 	wg        sync.WaitGroup
 	alive     atomic.Bool
 
+	turnMu     sync.Mutex
+	turnCancel context.CancelFunc // per-turn cancel for Interrupt()
+
 	thinkingBuf strings.Builder // accumulates thinking_delta chunks
 }
 
@@ -112,7 +115,12 @@ func (s *piSession) Send(prompt string, images []core.ImageAttachment, files []c
 
 	slog.Debug("piSession: launching", "resume", sid != "", "args", core.RedactArgs(args))
 
-	cmd := exec.CommandContext(s.ctx, s.cmd, args...)
+	turnCtx, turnCancel := context.WithCancel(s.ctx)
+	s.turnMu.Lock()
+	s.turnCancel = turnCancel
+	s.turnMu.Unlock()
+
+	cmd := exec.CommandContext(turnCtx, s.cmd, args...)
 	cmd.Dir = s.workDir
 	env := os.Environ()
 	if len(s.extraEnv) > 0 {
@@ -140,6 +148,11 @@ func (s *piSession) Send(prompt string, images []core.ImageAttachment, files []c
 
 func (s *piSession) readLoop(cmd *exec.Cmd, stdout io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer s.wg.Done()
+	defer func() {
+		s.turnMu.Lock()
+		s.turnCancel = nil
+		s.turnMu.Unlock()
+	}()
 	defer func() {
 		if err := cmd.Wait(); err != nil {
 			stderrMsg := strings.TrimSpace(stderrBuf.String())
@@ -375,6 +388,28 @@ func extractToolInput(item map[string]any) string {
 }
 
 func (s *piSession) RespondPermission(_ string, _ core.PermissionResult) error {
+	return nil
+}
+
+// Interrupt cancels the current per-turn context, killing the running
+// Pi process without destroying the session. The next Send() will
+// resume the conversation using --session with the stored sessionID.
+func (s *piSession) Interrupt() error {
+	if !s.alive.Load() {
+		return fmt.Errorf("pi: session not alive")
+	}
+	s.turnMu.Lock()
+	cancel := s.turnCancel
+	s.turnMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	sid, _ := s.sessionID.Load().(string)
+	select {
+	case s.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+	case <-s.ctx.Done():
+	}
 	return nil
 }
 
