@@ -185,6 +185,23 @@ func (s *tmuxSession) CurrentSessionID() string { return s.sessionID }
 
 func (s *tmuxSession) Alive() bool { return s.alive.Load() }
 
+func (s *tmuxSession) Interrupt() error {
+	if !s.alive.Load() {
+		return fmt.Errorf("tmux: session not alive")
+	}
+	err := s.sendCtrlC()
+	if err != nil {
+		return fmt.Errorf("tmux: interrupt: %w", err)
+	}
+	s.mu.Lock()
+	if s.pollCancel != nil {
+		s.pollCancel()
+		s.pollCancel = nil
+	}
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *tmuxSession) Close() error {
 	s.closeOnce.Do(func() {
 		s.alive.Store(false)
@@ -262,6 +279,14 @@ func sendKeys(target, keys string) error {
 	out, err = exec.Command("tmux", "send-keys", "-t", target, "Enter").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (s *tmuxSession) sendCtrlC() error {
+	_, err := exec.Command("tmux", "send-keys", "-t", s.target, "C-c").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tmux: send Ctrl-C: %w", err)
 	}
 	return nil
 }
