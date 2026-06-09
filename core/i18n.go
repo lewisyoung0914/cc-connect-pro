@@ -170,6 +170,8 @@ const (
 	MsgToolResultFmtFailed       MsgKey = "tool_result_fmt_failed"
 	MsgExecutionStopped          MsgKey = "execution_stopped"
 	MsgNoExecution               MsgKey = "no_execution"
+	MsgExecutionInterrupted      MsgKey = "execution_interrupted"
+	MsgInterruptFailed           MsgKey = "interrupt_failed"
 	MsgPreviousProcessing        MsgKey = "previous_processing"
 	MsgQueueFull                 MsgKey = "queue_full"
 	MsgMessageQueued             MsgKey = "message_queued"
@@ -702,6 +704,20 @@ var messages = map[MsgKey]map[Language]string{
 		LangTraditionalChinese: "沒有正在執行的任務。",
 		LangJapanese:           "実行中のタスクはありません。",
 		LangSpanish:            "No hay ejecución en progreso.",
+	},
+	MsgExecutionInterrupted: {
+		LangEnglish:            "⏸ Execution interrupted.",
+		LangChinese:            "⏸ 执行已中断。",
+		LangTraditionalChinese: "⏸ 執行已中斷。",
+		LangJapanese:           "⏸ 実行が中断されました。",
+		LangSpanish:            "⏸ Ejecución interrumpida.",
+	},
+	MsgInterruptFailed: {
+		LangEnglish:            "⚠ Interrupt failed, session terminated.",
+		LangChinese:            "⚠ 中断失败，会话已终止。",
+		LangTraditionalChinese: "⚠ 中斷失敗，會話已終止。",
+		LangJapanese:           "⚠ 中断に失敗しました、セッションが終了しました。",
+		LangSpanish:            "⚠ Interrupción fallida, sesión terminada.",
 	},
 	MsgPreviousProcessing: {
 		LangEnglish:            "⏳ Previous request still processing. Use `/ps <message>` to send a P.S. to the running task.",

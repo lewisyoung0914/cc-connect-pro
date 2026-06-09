@@ -320,6 +320,13 @@ type HistoryProvider interface {
 	GetSessionHistory(ctx context.Context, sessionID string, limit int) ([]HistoryEntry, error)
 }
 
+// Interrupter is an optional interface for AgentSession.
+// Implementations can interrupt the current turn without closing the session,
+// allowing the next message to continue in the same conversation context.
+type Interrupter interface {
+	Interrupt() error
+}
+
 // ProviderConfig holds API provider settings for an agent.
 type ProviderConfig struct {
 	Name     string

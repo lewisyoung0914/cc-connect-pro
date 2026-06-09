@@ -5860,6 +5860,8 @@ type controllableAgentSession struct {
 	report          *UsageReport
 	contextUsage    *ContextUsage
 	usageErr        error
+	interruptErr    error  // nil = interrupt succeeds; non-nil = simulate failure
+	interruptCalled bool   // set to true when Interrupt() is invoked
 }
 
 func newControllableSession(id string) *controllableAgentSession {
@@ -5897,6 +5899,11 @@ func (s *controllableAgentSession) Close() error {
 		close(s.closed)
 	}
 	return nil
+}
+
+func (s *controllableAgentSession) Interrupt() error {
+	s.interruptCalled = true
+	return s.interruptErr
 }
 
 // controllableAgent lets tests control which session is returned by StartSession.
@@ -6240,6 +6247,144 @@ func TestCmdStop_ClearsAgentSessionID(t *testing.T) {
 	got := active.GetAgentSessionID()
 	if got != "" {
 		t.Fatalf("AgentSessionID = %q, want empty after /stop", got)
+	}
+}
+
+func TestCmdStop_InterruptPreservesSession(t *testing.T) {
+	sess := newControllableSession("agent-1")
+	sess.interruptErr = nil // supports interrupt, succeeds
+	agent := &controllableAgent{nextSession: sess}
+	p := &stubPlatformEngine{n: "test"}
+	e := NewEngine("test", agent, []Platform{p}, "", LangEnglish)
+
+	key := "test:user1"
+	active := e.sessions.GetOrCreateActive(key)
+	active.SetAgentSessionID("agent-1", "controllable")
+	e.sessions.Save()
+
+	e.interactiveMu.Lock()
+	e.interactiveStates[key] = &interactiveState{
+		agentSession: sess,
+		platform:     p,
+		replyCtx:     "ctx",
+	}
+	e.interactiveMu.Unlock()
+
+	msg := &Message{SessionKey: key, ReplyCtx: "ctx"}
+	e.cmdStop(p, msg)
+
+	if !sess.interruptCalled {
+		t.Fatal("expected Interrupt() to be called")
+	}
+	if !sess.Alive() {
+		t.Fatal("expected session to remain alive after interrupt")
+	}
+	got := active.GetAgentSessionID()
+	if got == "" {
+		t.Fatal("AgentSessionID should not be cleared after interrupt")
+	}
+	e.interactiveMu.Lock()
+	state, exists := e.interactiveStates[key]
+	e.interactiveMu.Unlock()
+	if !exists || state == nil {
+		t.Fatal("interactiveState should not be removed after interrupt")
+	}
+	if !state.isInterrupted() {
+		t.Fatal("expected interrupted flag to be set")
+	}
+	sent := p.getSent()
+	if len(sent) != 1 || sent[0] != e.i18n.T(MsgExecutionInterrupted) {
+		t.Fatalf("sent = %v, want MsgExecutionInterrupted", sent)
+	}
+}
+
+func TestCmdStop_InterruptFallbackOnFailure(t *testing.T) {
+	sess := newControllableSession("agent-1")
+	sess.interruptErr = fmt.Errorf("interrupt not supported by process")
+	agent := &controllableAgent{nextSession: sess}
+	p := &stubPlatformEngine{n: "test"}
+	e := NewEngine("test", agent, []Platform{p}, "", LangEnglish)
+
+	key := "test:user1"
+	active := e.sessions.GetOrCreateActive(key)
+	active.SetAgentSessionID("agent-1", "controllable")
+	e.sessions.Save()
+
+	e.interactiveMu.Lock()
+	e.interactiveStates[key] = &interactiveState{
+		agentSession: sess,
+		platform:     p,
+		replyCtx:     "ctx",
+	}
+	e.interactiveMu.Unlock()
+
+	msg := &Message{SessionKey: key, ReplyCtx: "ctx"}
+	e.cmdStop(p, msg)
+
+	if !sess.interruptCalled {
+		t.Fatal("expected Interrupt() to be attempted")
+	}
+	got := active.GetAgentSessionID()
+	if got != "" {
+		t.Fatalf("AgentSessionID = %q, want empty after fallback termination", got)
+	}
+	e.interactiveMu.Lock()
+	state, exists := e.interactiveStates[key]
+	e.interactiveMu.Unlock()
+	if exists || state != nil {
+		t.Fatal("interactiveState should be removed after fallback")
+	}
+	sent := p.getSent()
+	if len(sent) != 1 || sent[0] != e.i18n.T(MsgInterruptFailed) {
+		t.Fatalf("sent = %v, want MsgInterruptFailed", sent)
+	}
+}
+
+func TestCmdStop_DoubleStopEscalatesToTerminate(t *testing.T) {
+	sess := newControllableSession("agent-1")
+	sess.interruptErr = nil
+	agent := &controllableAgent{nextSession: sess}
+	p := &stubPlatformEngine{n: "test"}
+	e := NewEngine("test", agent, []Platform{p}, "", LangEnglish)
+
+	key := "test:user1"
+	active := e.sessions.GetOrCreateActive(key)
+	active.SetAgentSessionID("agent-1", "controllable")
+	e.sessions.Save()
+
+	e.interactiveMu.Lock()
+	e.interactiveStates[key] = &interactiveState{
+		agentSession: sess,
+		platform:     p,
+		replyCtx:     "ctx",
+	}
+	e.interactiveMu.Unlock()
+
+	// First /stop: interrupt succeeds
+	msg := &Message{SessionKey: key, ReplyCtx: "ctx"}
+	e.cmdStop(p, msg)
+
+	sent1 := p.getSent()
+	if len(sent1) != 1 || sent1[0] != e.i18n.T(MsgExecutionInterrupted) {
+		t.Fatalf("first stop sent = %v, want MsgExecutionInterrupted", sent1)
+	}
+
+	// Second /stop: force terminate
+	e.cmdStop(p, msg)
+
+	got := active.GetAgentSessionID()
+	if got != "" {
+		t.Fatalf("AgentSessionID = %q, want empty after force terminate", got)
+	}
+	e.interactiveMu.Lock()
+	state, exists := e.interactiveStates[key]
+	e.interactiveMu.Unlock()
+	if exists || state != nil {
+		t.Fatal("interactiveState should be removed after force terminate")
+	}
+	sent2 := p.getSent()
+	if len(sent2) != 2 || sent2[1] != e.i18n.T(MsgExecutionStopped) {
+		t.Fatalf("second stop sent = %v, want MsgExecutionStopped", sent2)
 	}
 }
 

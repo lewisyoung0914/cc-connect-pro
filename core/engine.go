@@ -313,6 +313,7 @@ type interactiveState struct {
 	mu                     sync.Mutex
 	stopCh                 chan struct{}
 	stopped                bool
+	interrupted            bool // true after Interrupt() succeeds; event loop skips forwarding until EventResult resets it
 	pending                *pendingPermission
 	pendingMessages        []queuedMessage // messages queued while session was busy
 	approveAll             bool            // when true, auto-approve all permission requests for this session
@@ -403,6 +404,24 @@ func (s *interactiveState) markStopped() {
 		s.stopCh = make(chan struct{})
 	}
 	close(s.stopCh)
+}
+
+func (s *interactiveState) isInterrupted() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.interrupted
+}
+
+func (s *interactiveState) markInterrupted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.interrupted = true
+}
+
+func (s *interactiveState) clearInterrupted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.interrupted = false
 }
 
 // resolve safely closes the Resolved channel exactly once.
@@ -3711,6 +3730,12 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			hasRichCard = false
 		}
 
+		// Skip forwarding output while interrupted (agent is winding down);
+		// EventResult and EventPermissionRequest must still be processed.
+		if state.isInterrupted() && event.Type != EventResult && event.Type != EventPermissionRequest {
+			continue
+		}
+
 		switch event.Type {
 		case EventThinking:
 			if isEllipsisOnly(event.Content) {
@@ -4147,6 +4172,11 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			state.mu.Lock()
 			state.eventsNeedResync = false
 			state.mu.Unlock()
+
+			// Clear interrupted flag after the turn completes
+			if state.isInterrupted() {
+				state.clearInterrupted()
+			}
 
 			fullResponse := event.Content
 			// When tool progress is hidden, segmentStart stays 0 and textParts
@@ -8154,14 +8184,52 @@ func (e *Engine) cmdStop(p Platform, msg *Message) {
 	}
 
 	iKey := e.interactiveKeyForSessionKey(msg.SessionKey)
+
+	// If already interrupted, force terminate on second /stop
+	if e.isStateInterrupted(iKey) {
+		if !e.stopInteractiveSession(iKey, p, msg.ReplyCtx) {
+			if found := e.findInteractiveKeyForSession(msg.SessionKey); found != "" && found != iKey {
+				if e.stopInteractiveSession(found, p, msg.ReplyCtx) {
+					clearStaleSessionID()
+					e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
+					return
+				}
+			}
+			e.reply(p, msg.ReplyCtx, e.i18n.T(MsgNoExecution))
+			return
+		}
+		clearStaleSessionID()
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
+		return
+	}
+
+	// First attempt: interrupt (preserve session context)
+	interrupted, fallback := e.interruptInteractiveSession(iKey, p, msg.ReplyCtx)
+	if interrupted {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionInterrupted))
+		return
+	}
+	if !fallback {
+		// No active session at all — try multi-workspace fallback
+		if found := e.findInteractiveKeyForSession(msg.SessionKey); found != "" && found != iKey {
+			interrupted, fallback = e.interruptInteractiveSession(found, p, msg.ReplyCtx)
+			if interrupted {
+				e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionInterrupted))
+				return
+			}
+		}
+		if !fallback {
+			e.reply(p, msg.ReplyCtx, e.i18n.T(MsgNoExecution))
+			return
+		}
+	}
+
+	// Fallback: full termination (agent doesn't support Interrupter or Interrupt failed)
 	if !e.stopInteractiveSession(iKey, p, msg.ReplyCtx) {
-		// Fallback: try suffix scan in case interactiveKeyForSessionKey
-		// resolved a different key than the one used to store the state
-		// (e.g. workspace binding lookup inconsistency).
 		if found := e.findInteractiveKeyForSession(msg.SessionKey); found != "" && found != iKey {
 			if e.stopInteractiveSession(found, p, msg.ReplyCtx) {
 				clearStaleSessionID()
-				e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
+				e.reply(p, msg.ReplyCtx, e.i18n.T(MsgInterruptFailed))
 				return
 			}
 		}
@@ -8169,7 +8237,50 @@ func (e *Engine) cmdStop(p Platform, msg *Message) {
 		return
 	}
 	clearStaleSessionID()
-	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgExecutionStopped))
+	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgInterruptFailed))
+}
+
+// interruptInteractiveSession attempts to interrupt the current agent turn
+// without closing the session. Falls back to stopInteractiveSession if the
+// agent doesn't implement Interrupter or if Interrupt() fails.
+func (e *Engine) interruptInteractiveSession(sessionKey string, p Platform, replyCtx any) (interrupted bool, fallback bool) {
+	e.interactiveMu.Lock()
+	state, ok := e.interactiveStates[sessionKey]
+	e.interactiveMu.Unlock()
+	if !ok || state == nil {
+		return false, false
+	}
+
+	agentSession := state.agentSession
+	if agentSession == nil {
+		return false, false
+	}
+
+	interrupter, canInterrupt := agentSession.(Interrupter)
+	if !canInterrupt {
+		return false, true // signal fallback to stop logic
+	}
+
+	err := interrupter.Interrupt()
+	if err != nil {
+		slog.Warn("interrupt failed, falling back to full termination",
+			"session", sessionKey, "error", err)
+		return false, true // signal fallback to stop logic
+	}
+
+	// Interrupt succeeded: mark state as interrupted, keep session alive
+	state.markInterrupted()
+	return true, false
+}
+
+func (e *Engine) isStateInterrupted(sessionKey string) bool {
+	e.interactiveMu.Lock()
+	state, ok := e.interactiveStates[sessionKey]
+	e.interactiveMu.Unlock()
+	if !ok || state == nil {
+		return false
+	}
+	return state.isInterrupted()
 }
 
 func (e *Engine) stopInteractiveSession(sessionKey string, quietPlatform Platform, quietReplyCtx any) bool {
