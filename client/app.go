@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chenhg5/cc-connect/config"
 	"github.com/chenhg5/cc-connect/core"
+	lark "github.com/larksuite/oapi-sdk-go/v3"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -282,4 +284,249 @@ func homeDir() string {
 		return ""
 	}
 	return home
+}
+
+// FeishuPlatformDetail contains all feishu/lark platform option fields for a project.
+type FeishuPlatformDetail struct {
+	ProjectName   string `json:"projectName"`
+	PlatformType  string `json:"platformType"`
+	AppID         string `json:"appId"`
+	AppSecret     string `json:"appSecret"`
+	Domain        string `json:"domain"`
+	AllowFrom     string `json:"allowFrom"`
+	AllowChat     string `json:"allowChat"`
+	GroupOnly     bool   `json:"groupOnly"`
+	GroupReplyAll bool   `json:"groupReplyAll"`
+	ShareSession  bool   `json:"shareSession"`
+	ThreadIsolation bool `json:"threadIsolation"`
+	ReactionEmoji string `json:"reactionEmoji"`
+	DoneEmoji     string `json:"doneEmoji"`
+	ProgressStyle string `json:"progressStyle"`
+	EnableCard    bool   `json:"enableCard"`
+	ResolveMentions bool `json:"resolveMentions"`
+	Port          string `json:"port"`
+	CallbackPath  string `json:"callbackPath"`
+	EncryptKey    string `json:"encryptKey"`
+}
+
+// SaveFeishuConfigOpts holds the fields to save back for a feishu/lark platform.
+type SaveFeishuConfigOpts struct {
+	ProjectName     string `json:"projectName"`
+	AppID           string `json:"appId"`
+	AppSecret       string `json:"appSecret"`
+	Domain          string `json:"domain"`
+	AllowFrom       string `json:"allowFrom"`
+	AllowChat       string `json:"allowChat"`
+	GroupOnly       bool   `json:"groupOnly"`
+	GroupReplyAll   bool   `json:"groupReplyAll"`
+	ShareSession    bool   `json:"shareSession"`
+	ThreadIsolation bool   `json:"threadIsolation"`
+	ReactionEmoji   string `json:"reactionEmoji"`
+	DoneEmoji       string `json:"doneEmoji"`
+	ProgressStyle   string `json:"progressStyle"`
+	EnableCard      bool   `json:"enableCard"`
+	ResolveMentions bool   `json:"resolveMentions"`
+	Port            string `json:"port"`
+	CallbackPath    string `json:"callbackPath"`
+	EncryptKey      string `json:"encryptKey"`
+}
+
+// loadConfig ensures the config is loaded into a.cfg, refreshing if needed.
+func (a *App) loadConfig() error {
+	if a.cfg == nil {
+		cfgPath := resolveConfigPath(a.cfgPath)
+		cfg, err := config.Load(cfgPath)
+		if err != nil {
+			return err
+		}
+		a.cfg = cfg
+		a.cfgPath = cfgPath
+	}
+	return nil
+}
+
+// findFeishuPlatform returns the project config and the absolute platform index
+// for the first feishu/lark platform in the named project.
+func (a *App) findFeishuPlatform(projectName string) (*config.ProjectConfig, int, error) {
+	if err := a.loadConfig(); err != nil {
+		return nil, -1, err
+	}
+	for i := range a.cfg.Projects {
+		if a.cfg.Projects[i].Name == projectName {
+			for j := range a.cfg.Projects[i].Platforms {
+				t := strings.ToLower(strings.TrimSpace(a.cfg.Projects[i].Platforms[j].Type))
+				if t == "feishu" || t == "lark" {
+					return &a.cfg.Projects[i], j, nil
+				}
+			}
+			return nil, -1, fmt.Errorf("项目 %q 没有飞书/Lark 平台", projectName)
+		}
+	}
+	return nil, -1, fmt.Errorf("项目 %q 不存在", projectName)
+}
+
+// GetFeishuConfigDetail returns all feishu/lark platform option fields for a project.
+func (a *App) GetFeishuConfigDetail(projectName string) (*FeishuPlatformDetail, error) {
+	proj, platformIdx, err := a.findFeishuPlatform(projectName)
+	if err != nil {
+		return nil, err
+	}
+	platform := proj.Platforms[platformIdx]
+	opts := platform.Options
+
+	detail := &FeishuPlatformDetail{
+		ProjectName:  projectName,
+		PlatformType: platform.Type,
+		AppID:        stringOpt(opts, "app_id"),
+		AppSecret:    stringOpt(opts, "app_secret"),
+		Domain:       stringOpt(opts, "domain"),
+		AllowFrom:    stringOpt(opts, "allow_from"),
+		AllowChat:    stringOpt(opts, "allow_chat"),
+		GroupOnly:    boolOpt(opts, "group_only"),
+		GroupReplyAll: boolOpt(opts, "group_reply_all"),
+		ShareSession:  boolOpt(opts, "share_session_in_channel"),
+		ThreadIsolation: boolOpt(opts, "thread_isolation"),
+		ReactionEmoji: stringOpt(opts, "reaction_emoji"),
+		DoneEmoji:     stringOpt(opts, "done_emoji"),
+		ProgressStyle: stringOpt(opts, "progress_style"),
+		EnableCard:    boolOpt(opts, "enable_feishu_card"),
+		ResolveMentions: boolOpt(opts, "resolve_mentions"),
+		Port:          stringOpt(opts, "port"),
+		CallbackPath:  stringOpt(opts, "callback_path"),
+		EncryptKey:    stringOpt(opts, "encrypt_key"),
+	}
+
+	return detail, nil
+}
+
+// SaveFeishuConfig saves feishu/lark platform configuration back to config.toml.
+func (a *App) SaveFeishuConfig(opts SaveFeishuConfigOpts) error {
+	if err := a.loadConfig(); err != nil {
+		return err
+	}
+
+	// Find project and platform
+	_, platformIdx, err := a.findFeishuPlatform(opts.ProjectName)
+	if err != nil {
+		return err
+	}
+
+	// Set ConfigPath for the config package functions
+	config.ConfigPath = a.cfgPath
+
+	// Step 1: Save app_id/app_secret via SaveFeishuPlatformCredentials
+	_, err = config.SaveFeishuPlatformCredentials(config.FeishuCredentialUpdateOptions{
+		ProjectName:   opts.ProjectName,
+		PlatformIndex: 0,
+		AppID:         opts.AppID,
+		AppSecret:     opts.AppSecret,
+	})
+	if err != nil {
+		return fmt.Errorf("写入飞书凭证失败: %w", err)
+	}
+
+	// Step 2: Save other platform options via SaveFeishuPlatformOptions
+	platformOpts := []config.PlatformOptionUpdate{
+		{Key: "domain", Value: opts.Domain},
+		{Key: "allow_from", Value: opts.AllowFrom},
+		{Key: "allow_chat", Value: opts.AllowChat},
+		{Key: "group_only", Value: opts.GroupOnly},
+		{Key: "group_reply_all", Value: opts.GroupReplyAll},
+		{Key: "share_session_in_channel", Value: opts.ShareSession},
+		{Key: "thread_isolation", Value: opts.ThreadIsolation},
+		{Key: "reaction_emoji", Value: opts.ReactionEmoji},
+		{Key: "done_emoji", Value: opts.DoneEmoji},
+		{Key: "progress_style", Value: opts.ProgressStyle},
+		{Key: "enable_feishu_card", Value: opts.EnableCard},
+		{Key: "resolve_mentions", Value: opts.ResolveMentions},
+		{Key: "port", Value: opts.Port},
+		{Key: "callback_path", Value: opts.CallbackPath},
+		{Key: "encrypt_key", Value: opts.EncryptKey},
+	}
+
+	// Only save non-empty/changed options
+	filteredOpts := platformOpts[:0]
+	for _, opt := range platformOpts {
+		if v, ok := opt.Value.(string); ok && v == "" {
+			continue // skip empty string options (they weren't set)
+		}
+		filteredOpts = append(filteredOpts, opt)
+	}
+
+	if len(filteredOpts) > 0 {
+		err = config.SaveFeishuPlatformOptions(opts.ProjectName, platformIdx, filteredOpts)
+		if err != nil {
+			return fmt.Errorf("写入平台选项失败: %w", err)
+		}
+	}
+
+	// Reload config in memory
+	a.cfg, err = config.Load(a.cfgPath)
+	if err != nil {
+		return fmt.Errorf("重载配置失败: %w", err)
+	}
+
+	// If service is running, restart to pick up changes
+	if a.status == StatusRunning {
+		slog.Info("服务运行中，重启以应用配置变更")
+		if err := a.service.Restart(); err != nil {
+			return fmt.Errorf("重启服务失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ValidateFeishuCredentials verifies that the given app_id, app_secret, and domain
+// are valid by attempting to obtain a tenant access token and fetch bot info.
+func (a *App) ValidateFeishuCredentials(appID, appSecret, domain string) error {
+	if appID == "" || appSecret == "" {
+		return fmt.Errorf("App ID 和 App Secret 不能为空")
+	}
+
+	// Determine domain
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		domain = "https://open.feishu.cn"
+	}
+
+	// Create a temporary lark client with the provided credentials
+	var clientOpts []lark.ClientOptionFunc
+	if domain != lark.FeishuBaseUrl {
+		clientOpts = append(clientOpts, lark.WithOpenBaseUrl(domain))
+	}
+	client := lark.NewClient(appID, appSecret, clientOpts...)
+
+	// Try to get tenant info to verify credentials
+	ctx := context.Background()
+	resp, err := client.Tenant.Tenant.Query(ctx)
+	if err != nil {
+		return fmt.Errorf("凭证验证失败: %w", err)
+	}
+
+	if !resp.Success() {
+		return fmt.Errorf("凭证验证失败: code=%d, msg=%s", resp.Code, resp.Msg)
+	}
+
+	return nil
+}
+
+// stringOpt extracts a string value from a map[string]any, returning "" if missing.
+func stringOpt(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// boolOpt extracts a boolean value from a map[string]any, returning false if missing.
+func boolOpt(m map[string]any, key string) bool {
+	if v, ok := m[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
 }

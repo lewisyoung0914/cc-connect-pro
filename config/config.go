@@ -1922,6 +1922,124 @@ func SaveFeishuPlatformCredentials(opts FeishuCredentialUpdateOptions) (*FeishuC
 	}, nil
 }
 
+// PlatformOptionUpdate represents a single platform option key/value pair to update.
+// String values are TOML-quoted; bool and numeric values are written as raw TOML.
+type PlatformOptionUpdate struct {
+	Key   string // TOML key name (e.g. "allow_from", "group_only")
+	Value any    // string | bool | int64 | float64
+}
+
+// SaveFeishuPlatformOptions updates arbitrary platform options (beyond app_id/app_secret)
+// for a project's feishu/lark platform and persists the config atomically.
+// It mirrors the raw-TOML-line approach used by SaveFeishuPlatformCredentials.
+func SaveFeishuPlatformOptions(projectName string, platformAbsIndex int, opts []PlatformOptionUpdate) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	if ConfigPath == "" {
+		return fmt.Errorf("config path not set")
+	}
+	projectName = strings.TrimSpace(projectName)
+	if projectName == "" {
+		return fmt.Errorf("project name is required")
+	}
+
+	data, err := os.ReadFile(ConfigPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	raw := string(data)
+	cfg := &Config{}
+	if err := toml.Unmarshal(data, cfg); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	projectIdx := -1
+	for i := range cfg.Projects {
+		if cfg.Projects[i].Name == projectName {
+			projectIdx = i
+			break
+		}
+	}
+	if projectIdx < 0 {
+		return fmt.Errorf("project %q not found", projectName)
+	}
+	proj := &cfg.Projects[projectIdx]
+	if platformAbsIndex < 0 || platformAbsIndex >= len(proj.Platforms) {
+		return fmt.Errorf("platform index %d out of range for project %q", platformAbsIndex, projectName)
+	}
+	platform := &proj.Platforms[platformAbsIndex]
+	if platform.Options == nil {
+		platform.Options = map[string]any{}
+	}
+
+	// Update in-memory config first
+	for _, opt := range opts {
+		platform.Options[opt.Key] = opt.Value
+	}
+
+	lines, hadTrailing := splitConfigLines(raw)
+	spans := buildRawProjectSpans(lines)
+	if projectIdx >= len(spans) {
+		return fmt.Errorf("project %q located in parsed config but not raw file", projectName)
+	}
+	if platformAbsIndex >= len(spans[projectIdx].platforms) {
+		return fmt.Errorf("platform index %d located in parsed config but not raw file", platformAbsIndex)
+	}
+
+	reloadSpan := func() rawPlatformSpan {
+		spans = buildRawProjectSpans(lines)
+		return spans[projectIdx].platforms[platformAbsIndex]
+	}
+
+	span := spans[projectIdx].platforms[platformAbsIndex]
+
+	// Ensure [projects.platforms.options] section exists
+	if span.optionsStart < 0 {
+		insertAt := span.end + 1
+		block := make([]string, 0, 4)
+		if insertAt > 0 && strings.TrimSpace(lines[insertAt-1]) != "" {
+			block = append(block, "")
+		}
+		block = append(block, "[projects.platforms.options]")
+		if insertAt < len(lines) && strings.TrimSpace(lines[insertAt]) != "" {
+			block = append(block, "")
+		}
+		lines = insertLines(lines, insertAt, block)
+		span = reloadSpan()
+	}
+
+	// Upsert each option
+	optStart := span.optionsStart + 1
+	optEnd := span.optionsEnd
+	for _, opt := range opts {
+		switch v := opt.Value.(type) {
+		case string:
+			lines = upsertTomlStringKey(lines, optStart, optEnd, opt.Key, v)
+		case bool:
+			rawVal := "false"
+			if v {
+				rawVal = "true"
+			}
+			lines = upsertTomlRawKey(lines, optStart, optEnd, opt.Key, rawVal)
+		case int:
+			lines = upsertTomlRawKey(lines, optStart, optEnd, opt.Key, strconv.Itoa(v))
+		case int64:
+			lines = upsertTomlRawKey(lines, optStart, optEnd, opt.Key, strconv.FormatInt(v, 10))
+		case float64:
+			lines = upsertTomlRawKey(lines, optStart, optEnd, opt.Key, strconv.FormatFloat(v, 'f', -1, 64))
+		default:
+			// Fallback: try string representation
+			lines = upsertTomlStringKey(lines, optStart, optEnd, opt.Key, fmt.Sprintf("%v", v))
+		}
+		span = reloadSpan()
+		optStart = span.optionsStart + 1
+		optEnd = span.optionsEnd
+	}
+
+	return writeRawConfig(joinConfigLines(lines, hadTrailing))
+}
+
 func stringOption(v any) string {
 	if s, ok := v.(string); ok {
 		return s

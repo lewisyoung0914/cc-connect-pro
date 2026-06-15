@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/chenhg5/cc-connect v0.0.0
+	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.98-tui
 )
 
@@ -31,7 +32,6 @@ require (
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/kevinburke/ssh_config v1.4.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/larksuite/oapi-sdk-go/v3 v3.5.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
