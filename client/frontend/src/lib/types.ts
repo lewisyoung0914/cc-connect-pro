@@ -18,3 +18,32 @@ export interface ServiceError {
   message: string
   timestamp: number
 }
+
+export interface ProcessInfo {
+  pid: number
+  uptime: string
+  memoryMB: number
+  goroutines: number
+}
+
+export interface PlatformHealth {
+  platformName: string
+  projectName: string
+  connected: boolean
+  reconnectCount: number
+  messagesSent: number
+  messagesReceived: number
+}
+
+export interface LogEntry {
+  level: string
+  message: string
+  time: string
+  source?: string
+}
+
+export interface DoctorCheckResult {
+  name: string
+  passed: boolean
+  detail: string
+}

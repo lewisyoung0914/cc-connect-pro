@@ -1038,6 +1038,23 @@ func (e *Engine) AgentTypeName() string {
 	return ""
 }
 
+// StartedAt returns the time when the engine was created (approximately when it started).
+func (e *Engine) StartedAt() time.Time {
+	return e.startedAt
+}
+
+// GetPlatformHealthStatus returns a map of platform tag to ready status.
+// A platform is marked true if it has reported ready via OnPlatformReady.
+func (e *Engine) GetPlatformHealthStatus() map[string]bool {
+	e.platformLifecycleMu.Lock()
+	defer e.platformLifecycleMu.Unlock()
+	result := make(map[string]bool, len(e.platformReady))
+	for p, ready := range e.platformReady {
+		result[p.Tag()] = ready
+	}
+	return result
+}
+
 // ActiveSessionKeys returns the session keys of all active interactive sessions.
 func (e *Engine) ActiveSessionKeys() []string {
 	e.interactiveMu.Lock()

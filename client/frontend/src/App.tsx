@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Welcome } from './pages/Welcome'
 import { FeishuConfig } from './pages/FeishuConfig'
 import { Agents } from './pages/Agents'
+import { Monitor } from './pages/Monitor'
 import { useServiceStatus } from './hooks/useServiceStatus'
 import { useState, useEffect } from 'react'
 
@@ -37,18 +38,9 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/feishu" element={<FeishuConfig />} />
           <Route path="/agents" element={<Agents />} />
-          <Route path="/monitor" element={<PlaceholderPage title="监控" desc="子项目 5 将实现完整的健康监控页面" />} />
+          <Route path="/monitor" element={<Monitor />} />
         </Routes>
       </SidebarLayout>
     </HashRouter>
-  )
-}
-
-function PlaceholderPage({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="bg-surface rounded-lg p-6">
-      <h2 className="text-title text-primary">{title}</h2>
-      <p className="text-body text-secondary mt-2">{desc}</p>
-    </div>
   )
 }

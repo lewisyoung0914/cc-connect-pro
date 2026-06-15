@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/chenhg5/cc-connect/config"
 	"github.com/chenhg5/cc-connect/core"
@@ -52,6 +54,7 @@ type App struct {
 	trayMenu   *application.Menu
 	statusItem *application.MenuItem
 	window     *application.WebviewWindow
+	logBuffer  *LogRingBuffer
 }
 
 // ServiceStartup is the Wails lifecycle callback invoked when the application starts.
@@ -60,6 +63,10 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.ctx = ctx
 	a.status = StatusIdle
 	a.service = NewService(a)
+
+	// Set up log capture ring buffer (capacity 500)
+	a.logBuffer = NewLogRingBuffer(500)
+	setupLogCapture(a.logBuffer)
 
 	// Listen for service status events to update the tray
 	application.Get().Event.On("service:starting", func(event *application.CustomEvent) {
@@ -667,4 +674,129 @@ func boolOpt(m map[string]any, key string) bool {
 		}
 	}
 	return false
+}
+
+// ProcessInfo represents runtime process information
+type ProcessInfo struct {
+	PID        int     `json:"pid"`
+	Uptime     string  `json:"uptime"`
+	MemoryMB   float64 `json:"memoryMB"`
+	Goroutines int     `json:"goroutines"`
+}
+
+// PlatformHealth represents a platform's health status
+type PlatformHealth struct {
+	PlatformName    string `json:"platformName"`
+	ProjectName     string `json:"projectName"`
+	Connected       bool   `json:"connected"`
+	ReconnectCount  int    `json:"reconnectCount"`
+	MessagesSent    int64  `json:"messagesSent"`
+	MessagesReceived int64 `json:"messagesReceived"`
+}
+
+// DoctorCheckResult represents a doctor check result for the frontend
+type DoctorCheckResult struct {
+	Name   string `json:"name"`
+	Passed bool   `json:"passed"`
+	Detail string `json:"detail"`
+}
+
+// GetProcessInfo returns runtime process information
+func (a *App) GetProcessInfo() ProcessInfo {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	pid := os.Getpid()
+	uptime := ""
+	engines := a.service.GetEngines()
+	if engines != nil && len(engines) > 0 {
+		startedAt := engines[0].StartedAt()
+		uptime = formatDuration(time.Since(startedAt))
+	}
+
+	return ProcessInfo{
+		PID:        pid,
+		Uptime:     uptime,
+		MemoryMB:   float64(m.Alloc) / 1024 / 1024,
+		Goroutines: runtime.NumGoroutine(),
+	}
+}
+
+// GetPlatformHealth returns health info for all platforms across all engines
+func (a *App) GetPlatformHealth() []PlatformHealth {
+	engines := a.service.GetEngines()
+	if engines == nil {
+		return nil
+	}
+
+	var all []PlatformHealth
+	for _, e := range engines {
+		healthStatus := e.GetPlatformHealthStatus()
+		projectName := e.ProjectName()
+
+		for tag, ready := range healthStatus {
+			all = append(all, PlatformHealth{
+				PlatformName:    tag,
+				ProjectName:     projectName,
+				Connected:       ready,
+				ReconnectCount:  0,
+				MessagesSent:    0,
+				MessagesReceived: 0,
+			})
+		}
+	}
+	return all
+}
+
+// GetRecentLogs returns the last N captured log entries
+func (a *App) GetRecentLogs(count int) []LogEntry {
+	if a.logBuffer == nil {
+		return []LogEntry{}
+	}
+	return a.logBuffer.Recent(count)
+}
+
+// RunDoctorChecks runs diagnostic checks for all engines
+func (a *App) RunDoctorChecks() []DoctorCheckResult {
+	engines := a.service.GetEngines()
+	if engines == nil || len(engines) == 0 {
+		return []DoctorCheckResult{
+			{Name: "Service", Passed: false, Detail: "服务未运行"},
+		}
+	}
+
+	var all []DoctorCheckResult
+	ctx := context.Background()
+
+	for _, e := range engines {
+		agent := e.GetAgent()
+		results := core.RunDoctorChecks(ctx, agent, nil)
+		for _, r := range results {
+			all = append(all, DoctorCheckResult{
+				Name:   r.Name,
+				Passed: r.Status == core.DoctorPass,
+				Detail: r.Detail,
+			})
+		}
+	}
+	return all
+}
+
+// formatDuration formats a time.Duration as a human-readable string
+func formatDuration(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+	seconds := int(d.Seconds()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm %ds", days, hours, minutes, seconds)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+	return fmt.Sprintf("%ds", seconds)
 }
