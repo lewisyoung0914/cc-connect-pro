@@ -41,11 +41,15 @@ type ProjectInfo struct {
 
 // App is the Wails binding struct exposed to the frontend.
 type App struct {
-	ctx     context.Context
-	service *Service
-	status  ServiceStatus
-	cfg     *config.Config
-	cfgPath string
+	ctx        context.Context
+	service    *Service
+	status     ServiceStatus
+	cfg        *config.Config
+	cfgPath    string
+	tray       *application.SystemTray
+	trayMenu   *application.Menu
+	statusItem *application.MenuItem
+	window     *application.WebviewWindow
 }
 
 // ServiceStartup is the Wails lifecycle callback invoked when the application starts.
@@ -54,6 +58,47 @@ func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOpt
 	a.ctx = ctx
 	a.status = StatusIdle
 	a.service = NewService(a)
+
+	// Listen for service status events to update the tray
+	application.Get().Event.On("service:starting", func(event *application.CustomEvent) {
+		a.status = StatusStarting
+		if a.tray != nil && a.trayMenu != nil {
+			updateTrayStatus(a.tray, a.trayMenu, a.status)
+		}
+	})
+	application.Get().Event.On("service:running", func(event *application.CustomEvent) {
+		a.status = StatusRunning
+		if a.tray != nil && a.trayMenu != nil {
+			updateTrayStatus(a.tray, a.trayMenu, a.status)
+		}
+	})
+	application.Get().Event.On("service:stopping", func(event *application.CustomEvent) {
+		a.status = StatusStopping
+		if a.tray != nil && a.trayMenu != nil {
+			updateTrayStatus(a.tray, a.trayMenu, a.status)
+		}
+	})
+	application.Get().Event.On("service:idle", func(event *application.CustomEvent) {
+		a.status = StatusIdle
+		if a.tray != nil && a.trayMenu != nil {
+			updateTrayStatus(a.tray, a.trayMenu, a.status)
+		}
+	})
+	application.Get().Event.On("service:error", func(event *application.CustomEvent) {
+		a.status = StatusError
+		if a.tray != nil && a.trayMenu != nil {
+			updateTrayStatus(a.tray, a.trayMenu, a.status)
+		}
+	})
+
+	return nil
+}
+
+// Shutdown performs a graceful shutdown of the service.
+func (a *App) Shutdown() error {
+	if a.service != nil {
+		return a.service.Stop()
+	}
 	return nil
 }
 
