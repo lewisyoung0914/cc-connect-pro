@@ -1,0 +1,26 @@
+{
+  "$schema": "https://wails.io/schemas/wails.v3.json",
+  "name": "cc-connect",
+  "version": "0.1.0",
+  "author": {
+    "name": "cc-connect"
+  },
+  "description": "cc-connect Desktop Client",
+  "frontend": {
+    "dir": "frontend",
+    "install": "npm install",
+    "build": "npm run build",
+    "dev": "npm run dev",
+    "bin": "frontend/dist"
+  },
+  "build": {
+    "outputfilename": "cc-connect",
+    "obfuscated": false,
+    "ldflags": [],
+    "tags": [],
+    "strip": false
+  },
+  "bindings": {
+    "dir": "bindings"
+  }
+}
