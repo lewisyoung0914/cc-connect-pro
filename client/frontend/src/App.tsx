@@ -3,6 +3,7 @@ import { SidebarLayout } from './layouts/SidebarLayout'
 import { Dashboard } from './pages/Dashboard'
 import { Welcome } from './pages/Welcome'
 import { FeishuConfig } from './pages/FeishuConfig'
+import { Agents } from './pages/Agents'
 import { useServiceStatus } from './hooks/useServiceStatus'
 import { useState, useEffect } from 'react'
 
@@ -35,7 +36,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/feishu" element={<FeishuConfig />} />
-          <Route path="/agents" element={<PlaceholderPage title="Agent 管理" desc="子项目 4 将实现完整的 Agent 状态与任务队列页面" />} />
+          <Route path="/agents" element={<Agents />} />
           <Route path="/monitor" element={<PlaceholderPage title="监控" desc="子项目 5 将实现完整的健康监控页面" />} />
         </Routes>
       </SidebarLayout>

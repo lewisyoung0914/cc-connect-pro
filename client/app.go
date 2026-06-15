@@ -511,6 +511,144 @@ func (a *App) ValidateFeishuCredentials(appID, appSecret, domain string) error {
 	return nil
 }
 
+// SessionInfo describes an active interactive session for the frontend.
+type SessionInfo struct {
+	SessionKey    string `json:"sessionKey"`
+	AgentSessionID string `json:"agentSessionId"`
+	AgentType     string `json:"agentType"`
+	ProjectName   string `json:"projectName"`
+	Platform      string `json:"platform"`
+	ChatName      string `json:"chatName"`
+	UserName      string `json:"userName"`
+	Status        string `json:"status"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+	QueueDepth    int    `json:"queueDepth"`
+}
+
+// TaskInfo describes a queued message for the frontend task queue view.
+type TaskInfo struct {
+	Platform  string `json:"platform"`
+	UserName  string `json:"userName"`
+	Content   string `json:"content"`
+	QueueTime string `json:"queueTime"`
+}
+
+// AgentStatusInfo describes the status of an engine's agent for the frontend.
+type AgentStatusInfo struct {
+	ProjectName string `json:"projectName"`
+	AgentType   string `json:"agentType"`
+	Status      string `json:"status"` // "running", "idle", "error"
+}
+
+// ListSessions returns details for all active interactive sessions across all engines.
+func (a *App) ListSessions() []SessionInfo {
+	engines := a.service.GetEngines()
+	if engines == nil {
+		return nil
+	}
+
+	var all []SessionInfo
+	for _, e := range engines {
+		details := e.ListActiveInteractiveStates()
+		for _, d := range details {
+			info := SessionInfo{
+				SessionKey:    d.SessionKey,
+				AgentSessionID: d.AgentSessionID,
+				AgentType:     d.AgentType,
+				ProjectName:   d.ProjectName,
+				Platform:      d.Platform,
+				ChatName:      d.ChatName,
+				UserName:      d.UserName,
+				Status:        d.Status,
+				QueueDepth:    d.QueueDepth,
+			}
+			if !d.CreatedAt.IsZero() {
+				info.CreatedAt = d.CreatedAt.Format("2006-01-02 15:04:05")
+			}
+			if !d.UpdatedAt.IsZero() {
+				info.UpdatedAt = d.UpdatedAt.Format("2006-01-02 15:04:05")
+			}
+			all = append(all, info)
+		}
+	}
+	return all
+}
+
+// GetTaskQueue returns the queued messages for the engine identified by projectName.
+func (a *App) GetTaskQueue(projectName string) []TaskInfo {
+	engines := a.service.GetEngines()
+	if engines == nil {
+		return nil
+	}
+
+	for _, e := range engines {
+		if e.ProjectName() == projectName {
+			var tasks []TaskInfo
+			details := e.ListActiveInteractiveStates()
+			for _, d := range details {
+				if d.QueueDepth > 0 {
+					qmsgs := e.GetQueuedMessages(d.SessionKey)
+					for _, m := range qmsgs {
+						tasks = append(tasks, TaskInfo{
+							Platform:  m.Platform,
+							UserName:  m.UserName,
+							Content:   m.Content,
+							QueueTime: m.QueuedAt.Format("2006-01-02 15:04:05"),
+						})
+					}
+				}
+			}
+			return tasks
+		}
+	}
+	return nil
+}
+
+// StopSession stops the interactive session identified by sessionKey.
+// It finds the appropriate engine and calls StopInteractiveSession.
+func (a *App) StopSession(sessionKey string) error {
+	engines := a.service.GetEngines()
+	if engines == nil {
+		return fmt.Errorf("服务未运行")
+	}
+
+	for _, e := range engines {
+		details := e.ListActiveInteractiveStates()
+		for _, d := range details {
+			if d.SessionKey == sessionKey {
+				return e.StopInteractiveSession(sessionKey)
+			}
+		}
+	}
+	return fmt.Errorf("未找到活跃会话: %s", sessionKey)
+}
+
+// GetAgentStatus returns the status of each engine's agent.
+func (a *App) GetAgentStatus() []AgentStatusInfo {
+	engines := a.service.GetEngines()
+	if engines == nil {
+		return nil
+	}
+
+	var statuses []AgentStatusInfo
+	for _, e := range engines {
+		status := AgentStatusInfo{
+			ProjectName: e.ProjectName(),
+			AgentType:   e.AgentTypeName(),
+		}
+		// Determine status based on whether there are active sessions
+		keys := e.ActiveSessionKeys()
+		if len(keys) > 0 {
+			status.Status = "running"
+		} else {
+			status.Status = "idle"
+		}
+		statuses = append(statuses, status)
+	}
+	return statuses
+}
+
 // stringOpt extracts a string value from a map[string]any, returning "" if missing.
 func stringOpt(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
