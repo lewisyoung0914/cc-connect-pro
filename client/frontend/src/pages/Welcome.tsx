@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react'
-
-// Placeholder - will be replaced by Wails auto-generated bindings
-const ListRegisteredAgents = async (): Promise<string[]> => { console.log('ListRegisteredAgents called'); return [] }
-const CreateProjectWithFeishu = async (opts: {
-  projectName: string
-  agentType: string
-  appId: string
-  appSecret: string
-  workDir: string
-}): Promise<void> => { console.log('CreateProjectWithFeishu called', opts) }
-const StartService = async () => { console.log('StartService called') }
+import { App, CreateProjectWithFeishuOpts } from '../../bindings/github.com/chenhg5/cc-connect/client'
+import { Events } from '@wailsio/runtime'
 
 interface WelcomeProps {
   onConfigCreated: () => void
@@ -26,8 +17,33 @@ export function Welcome({ onConfigCreated }: WelcomeProps) {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    ListRegisteredAgents().then(setAgents).catch(() => setAgents([]))
+    App.ListRegisteredAgents().then(setAgents).catch(() => setAgents([]))
   }, [])
+
+  // Listen for service status events so we can wait for the engine to
+  // actually reach running (or error) state before switching to Dashboard.
+  useEffect(() => {
+    if (!loading) return // only listen during startup
+
+    const unsubs: (() => void)[] = []
+    unsubs.push(Events.On('service:running', () => {
+      setLoading(false)
+      onConfigCreated()
+    }))
+    unsubs.push(Events.On('service:error', (data: any) => {
+      setLoading(false)
+      const msg = data?.data || data || '服务启动失败'
+      setError(msg)
+      // Still switch to main layout so user can see the error in Dashboard
+      onConfigCreated()
+    }))
+
+    return () => {
+      for (const unsub of unsubs) {
+        unsub()
+      }
+    }
+  }, [loading, onConfigCreated])
 
   const canSubmit = projectName.trim() && appId.trim() && appSecret.trim() && agentType
 
@@ -35,19 +51,19 @@ export function Welcome({ onConfigCreated }: WelcomeProps) {
     setError('')
     setLoading(true)
     try {
-      await CreateProjectWithFeishu({
+      await App.CreateProjectWithFeishu(new CreateProjectWithFeishuOpts({
         projectName,
         agentType,
         appId,
         appSecret,
         workDir,
-      })
-      await StartService()
-      onConfigCreated()
+      }))
+      await App.StartService()
+      // Don't call onConfigCreated() here — wait for service:running or
+      // service:error event (handled in the useEffect above).
     } catch (err: any) {
-      setError(err?.message || '创建失败')
-    } finally {
       setLoading(false)
+      setError(err?.message || '创建失败')
     }
   }
 
@@ -55,7 +71,7 @@ export function Welcome({ onConfigCreated }: WelcomeProps) {
     <div className="flex items-center justify-center min-h-screen bg-white">
       <div className="w-[400px] space-y-6">
         <div className="text-center">
-          <h1 className="text-large-title font-semibold text-primary">欢迎使用 cc-connect</h1>
+          <h1 className="text-large-title font-semibold text-primary">欢迎使用 cc-connect-pro</h1>
           <p className="text-body text-secondary mt-2">配置飞书应用凭证，即可开始使用</p>
         </div>
 

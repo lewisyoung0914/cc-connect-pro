@@ -31,6 +31,8 @@ type copilotSession struct {
 	model     string
 	provider  *copilotWireProviderConfig
 	workDir   string
+	cliBin    string   // CLI binary path (stored for Interrupt restart)
+	extraEnv  []string // extra env vars (stored for Interrupt restart)
 	ctx       context.Context
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -38,6 +40,15 @@ type copilotSession struct {
 
 	// autoApprove is set when mode == "bypassPermissions"
 	autoApprove atomic.Bool
+
+	// interrupting is true during Interrupt(): the readLoop defers skip
+	// closing events/done and skip setting alive=false, allowing the
+	// session to survive a process restart with session.resume.
+	interrupting atomic.Bool
+	// processDone is signalled once when the old process exits during
+	// Interrupt(); it allows Interrupt() to know when the old process is
+	// fully dead so it can restart.
+	processDone chan struct{}
 
 	// pendingPermissions maps Copilot requestId to JSON-RPC request ids
 	// for permission.request server-to-client RPC calls. eventPermissions
@@ -126,9 +137,12 @@ func newCopilotSession(ctx context.Context, workDir, cliBin, model, mode, resume
 		model:              model,
 		provider:           provider,
 		workDir:            workDir,
+		cliBin:             cliBin,
+		extraEnv:           extraEnv,
 		ctx:                sessionCtx,
 		cancel:             cancel,
 		done:               make(chan struct{}),
+		processDone:        make(chan struct{}),
 		pendingPermissions: make(map[string]json.RawMessage),
 		eventPermissions:   make(map[string]struct{}),
 	}
@@ -239,6 +253,16 @@ func newCopilotSessionID() string {
 
 func (cs *copilotSession) readLoop(stderrBuf *bytes.Buffer) {
 	defer func() {
+		// When interrupting (process restart for session.resume), keep the
+		// session alive: don't close channels or set alive=false. The old
+		// process just needs to exit; Interrupt() will restart a new one.
+		if cs.interrupting.Load() {
+			// Wait for old process to exit and signal Interrupt().
+			_ = cs.cmd.Wait()
+			close(cs.processDone)
+			return
+		}
+
 		cs.alive.Store(false)
 		cs.rpc.cancelAll(fmt.Errorf("process exited"))
 
@@ -825,6 +849,133 @@ var (
 	copilotGracefulTimeout = 3 * time.Second
 	copilotSigtermWait     = 5 * time.Second
 )
+
+// Interrupt stops the current turn by closing stdin (graceful process exit),
+// restarting the Copilot process, and calling session.resume to continue in
+// the same conversation context. Implements core.Interrupter.
+func (cs *copilotSession) Interrupt() error {
+	if !cs.alive.Load() {
+		return fmt.Errorf("copilot: session not alive")
+	}
+
+	sid := cs.CurrentSessionID()
+	if sid == "" {
+		return fmt.Errorf("copilot: no session ID to resume")
+	}
+
+	slog.Info("copilotSession: interrupting", "sessionId", sid)
+
+	// Mark that we're interrupting so readLoop's defer doesn't close
+	// channels or mark the session as dead.
+	cs.interrupting.Store(true)
+
+	// Close stdin to trigger graceful process exit.
+	if w, ok := cs.rpc.writer.w.(io.Closer); ok {
+		_ = w.Close()
+	}
+
+	// Wait for the old process to exit (signalled via processDone).
+	select {
+	case <-cs.processDone:
+		slog.Info("copilotSession: old process exited after stdin close")
+	case <-time.After(copilotGracefulTimeout):
+		slog.Warn("copilotSession: interrupt graceful timeout, sending SIGTERM")
+		terminateCmd(cs.cmd)
+		select {
+		case <-cs.processDone:
+			slog.Info("copilotSession: old process exited after SIGTERM")
+		case <-time.After(copilotSigtermWait):
+			slog.Warn("copilotSession: interrupt SIGTERM timeout, force killing")
+			_ = forceKillCmd(cs.cmd)
+			select {
+			case <-cs.processDone:
+			case <-time.After(3 * time.Second):
+				slog.Error("copilotSession: old process refuses to die during interrupt")
+				cs.interrupting.Store(false)
+				return fmt.Errorf("copilot: old process refused to exit")
+			}
+		}
+	}
+
+	// Old process is dead. Clear pending permissions (stale from old process).
+	cs.pendingPermMu.Lock()
+	cs.pendingPermissions = make(map[string]json.RawMessage)
+	cs.eventPermissions = make(map[string]struct{})
+	cs.pendingPermMu.Unlock()
+
+	// Spawn a new process with the same configuration.
+	newCmd := exec.CommandContext(cs.ctx, cs.cliBin, "--headless", "--stdio", "--no-auto-update")
+	newCmd.Dir = cs.workDir
+	prepareCmdForKill(newCmd)
+
+	env := os.Environ()
+	if len(cs.extraEnv) > 0 {
+		env = core.MergeEnv(env, cs.extraEnv)
+	}
+	newCmd.Env = env
+
+	newStdin, err := newCmd.StdinPipe()
+	if err != nil {
+		cs.interrupting.Store(false)
+		cs.alive.Store(false)
+		close(cs.events)
+		close(cs.done)
+		return fmt.Errorf("copilot: interrupt restart stdin pipe: %w", err)
+	}
+
+	newStdout, err := newCmd.StdoutPipe()
+	if err != nil {
+		cs.interrupting.Store(false)
+		cs.alive.Store(false)
+		close(cs.events)
+		close(cs.done)
+		return fmt.Errorf("copilot: interrupt restart stdout pipe: %w", err)
+	}
+
+	var newStderrBuf bytes.Buffer
+	newCmd.Stderr = &newStderrBuf
+
+	if err := newCmd.Start(); err != nil {
+		cs.interrupting.Store(false)
+		cs.alive.Store(false)
+		close(cs.events)
+		close(cs.done)
+		return fmt.Errorf("copilot: interrupt restart: %w", err)
+	}
+
+	// Replace session internals with the new process transport.
+	cs.cmd = newCmd
+	cs.rpc = newRPCClient(newStdin)
+	cs.reader = newLSPReader(newStdout)
+	cs.processDone = make(chan struct{}) // fresh channel for the new process
+	cs.done = make(chan struct{})        // fresh done channel
+
+	// Clear interrupting before starting the new readLoop so that if the
+	// new process dies unexpectedly, the readLoop will properly close
+	// events/done channels rather than skipping them.
+	cs.interrupting.Store(false)
+
+	// Start the read loop for the new process.
+	go cs.readLoop(&newStderrBuf)
+
+	// Handshake: ping + session.resume with the saved session ID.
+	if err := cs.handshake(sid); err != nil {
+		slog.Error("copilotSession: interrupt resume handshake failed", "error", err)
+		_ = cs.Close()
+		return fmt.Errorf("copilot: interrupt resume handshake: %w", err)
+	}
+
+	// Emit a synthetic EventResult so the engine knows the turn has ended
+	// and clears the interrupted flag.
+	select {
+	case cs.events <- core.Event{Type: core.EventResult, SessionID: sid, Done: true}:
+		slog.Info("copilotSession: interrupt completed, session resumed", "sessionId", sid)
+	case <-cs.ctx.Done():
+		return cs.ctx.Err()
+	}
+
+	return nil
+}
 
 func (cs *copilotSession) Close() error {
 	// Close stdin to signal EOF

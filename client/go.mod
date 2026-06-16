@@ -6,6 +6,7 @@ require (
 	github.com/chenhg5/cc-connect v0.0.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.98-tui
+	golang.org/x/sys v0.43.0
 )
 
 require (
@@ -42,7 +43,6 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 

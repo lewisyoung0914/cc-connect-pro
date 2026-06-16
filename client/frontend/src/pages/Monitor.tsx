@@ -1,42 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { StatusDot } from '../components/StatusDot'
-
-// Placeholder Wails bindings - will be replaced by auto-generated ones
-const GetProcessInfo = async (): Promise<ProcessInfo> => ({
-  pid: 0, uptime: '', memoryMB: 0, goroutines: 0
-})
-const GetPlatformHealth = async (): Promise<PlatformHealth[]> => []
-const GetRecentLogs = async (_count: number): Promise<LogEntry[]> => []
-const RunDoctorChecks = async (): Promise<DoctorCheckResult[]> => []
-
-interface ProcessInfo {
-  pid: number
-  uptime: string
-  memoryMB: number
-  goroutines: number
-}
-
-interface PlatformHealth {
-  platformName: string
-  projectName: string
-  connected: boolean
-  reconnectCount: number
-  messagesSent: number
-  messagesReceived: number
-}
-
-interface LogEntry {
-  level: string
-  message: string
-  time: string
-  source?: string
-}
-
-interface DoctorCheckResult {
-  name: string
-  passed: boolean
-  detail: string
-}
+import { App, ProcessInfo, PlatformHealth, LogEntry, DoctorCheckResult } from '../../bindings/github.com/chenhg5/cc-connect/client'
 
 const levelColors: Record<string, string> = {
   ERROR: 'bg-red-500',
@@ -46,9 +10,7 @@ const levelColors: Record<string, string> = {
 }
 
 export function Monitor() {
-  const [processInfo, setProcessInfo] = useState<ProcessInfo>({
-    pid: 0, uptime: '', memoryMB: 0, goroutines: 0
-  })
+  const [processInfo, setProcessInfo] = useState<ProcessInfo>(new ProcessInfo())
   const [platforms, setPlatforms] = useState<PlatformHealth[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logCount, setLogCount] = useState(100)
@@ -61,7 +23,7 @@ export function Monitor() {
   useEffect(() => {
     const fetchProcessInfo = async () => {
       try {
-        const info = await GetProcessInfo()
+        const info = await App.GetProcessInfo()
         setProcessInfo(info)
       } catch {
         // ignore errors
@@ -76,7 +38,7 @@ export function Monitor() {
   useEffect(() => {
     const fetchHealth = async () => {
       try {
-        const health = await GetPlatformHealth()
+        const health = await App.GetPlatformHealth()
         setPlatforms(health || [])
       } catch {
         // ignore errors
@@ -91,7 +53,7 @@ export function Monitor() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const entries = await GetRecentLogs(logCount)
+        const entries = await App.GetRecentLogs(logCount)
         setLogs(entries || [])
       } catch {
         // ignore errors
@@ -120,7 +82,7 @@ export function Monitor() {
   const handleRunDoctor = async () => {
     setDoctorRunning(true)
     try {
-      const results = await RunDoctorChecks()
+      const results = await App.RunDoctorChecks()
       setDoctorResults(results || [])
     } catch {
       // ignore errors
@@ -256,7 +218,7 @@ export function Monitor() {
             {doctorResults.map((r, i) => (
               <div key={i} className="flex items-center gap-3">
                 <span className={`text-body ${r.passed ? 'text-success' : 'text-red-500'}`}>
-                  {r.passed ? '\u2713' : '\u2717'}
+                  {r.passed ? '✓' : '✗'}
                 </span>
                 <span className="text-body text-primary">{r.name}</span>
                 <span className="text-caption text-secondary ml-auto">{r.detail}</span>

@@ -15,24 +15,36 @@ func init() {
 	accentIconBytes = generateIcon(color.RGBA{R: 0x58, G: 0x56, B: 0xD6, A: 0xFF})
 }
 
-// generateIcon creates a 16x16 PNG icon depicting two dots connected by a line,
-// on a transparent background, using the given foreground color.
+// generateIcon creates a 32x32 PNG icon depicting a connection symbol:
+// two filled circles connected by a thick line, on a transparent background.
+// 32x32 is the recommended size for Windows system tray icons.
 func generateIcon(fg color.RGBA) []byte {
-	const size = 16
+	const size = 32
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 
-	// Transparent background is the zero value for RGBA, so no fill needed.
+	// Draw a thick line from top-left dot center (7,7) to bottom-right dot center (24,24)
+	drawThickLine(img, 7, 7, 24, 24, 2, fg)
 
-	// Draw a line from top-left dot center (3,3) to bottom-right dot center (12,12)
-	drawLine(img, 3, 3, 12, 12, fg)
-
-	// Draw two dots (filled circles of radius 2)
-	drawFilledCircle(img, 3, 3, 2, fg)
-	drawFilledCircle(img, 12, 12, 2, fg)
+	// Draw two filled circles of radius 5 (large enough to be clearly visible)
+	drawFilledCircle(img, 7, 7, 5, fg)
+	drawFilledCircle(img, 24, 24, 5, fg)
 
 	var buf bytes.Buffer
 	png.Encode(&buf, img)
 	return buf.Bytes()
+}
+
+// drawThickLine draws a line of the given thickness from (x0,y0) to (x1,y1).
+func drawThickLine(img *image.RGBA, x0, y0, x1, y1, thickness int, c color.RGBA) {
+	// Draw the center line
+	drawLine(img, x0, y0, x1, y1, c)
+	// Draw offset lines for thickness
+	for offset := 1; offset < thickness; offset++ {
+		drawLine(img, x0+offset, y0, x1+offset, y1, c)
+		drawLine(img, x0, y0+offset, x1, y1+offset, c)
+		drawLine(img, x0-offset, y0, x1-offset, y1, c)
+		drawLine(img, x0, y0-offset, x1, y1-offset, c)
+	}
 }
 
 // drawLine draws a 1-pixel-wide line from (x0,y0) to (x1,y1) using Bresenham's algorithm.

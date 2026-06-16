@@ -10,7 +10,7 @@ import (
 func setupTray(app *application.App, window *application.WebviewWindow, serviceApp *App) (*application.SystemTray, *application.Menu) {
 	tray := app.SystemTray.New()
 
-	tray.SetTooltip("cc-connect")
+	tray.SetTooltip("cc-connect-pro")
 	tray.SetIcon(defaultIconBytes)
 
 	menu := application.NewMenu()
@@ -38,11 +38,11 @@ func setupTray(app *application.App, window *application.WebviewWindow, serviceA
 
 	menu.AddSeparator()
 
-	// Quit
+	// Quit the entire application
 	quitItem := menu.Add("退出")
 	quitItem.OnClick(func(*application.Context) {
 		_ = serviceApp.Shutdown()
-		application.Get().Quit()
+		app.Quit()
 	})
 
 	tray.SetMenu(menu)
@@ -62,7 +62,8 @@ func setupTray(app *application.App, window *application.WebviewWindow, serviceA
 }
 
 // updateTrayStatus updates the tray icon and status menu item based on the service status.
-func updateTrayStatus(tray *application.SystemTray, menu *application.Menu, status ServiceStatus) {
+// It uses the stored statusItem reference from serviceApp for reliable label updates.
+func updateTrayStatus(serviceApp *App, status ServiceStatus) {
 	var label string
 	var icon []byte
 
@@ -87,16 +88,11 @@ func updateTrayStatus(tray *application.SystemTray, menu *application.Menu, stat
 		icon = defaultIconBytes
 	}
 
-	tray.SetIcon(icon)
-	tray.SetTooltip("cc-connect - " + label)
+	serviceApp.tray.SetIcon(icon)
+	serviceApp.tray.SetTooltip("cc-connect-pro - " + label)
 
-	// Update the status menu item label
-	statusItem := menu.FindByLabel("状态: 未启动")
-	if statusItem == nil {
-		// Try to find by partial match using ItemAt(0)
-		statusItem = menu.ItemAt(0)
-	}
-	if statusItem != nil {
-		statusItem.SetLabel(label)
+	// Update the status menu item using the stored reference
+	if serviceApp.statusItem != nil {
+		serviceApp.statusItem.SetLabel(label)
 	}
 }

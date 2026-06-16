@@ -168,6 +168,13 @@ type Platform struct {
 	// without requiring another @bot mention. Value is the last-seen time so
 	// stale entries can be expired by a future TTL sweep if needed.
 	activeThreadSessions sync.Map // sessionKey -> time.Time
+	// Async lifecycle: Feishu WebSocket starts in a background goroutine,
+	// so Start() returns before the connection is actually established.
+	// The engine uses SetLifecycleHandler/OnPlatformReady/OnPlatformUnavailable
+	// to track real readiness instead of treating Start() return as "connected".
+	lifecycle   core.PlatformLifecycleHandler
+	wsReady     bool   // set true once OnPlatformReady has been called for this platform
+	wsErrMsg    string // last WebSocket error message, for diagnostics
 }
 
 type interactivePlatform struct {
@@ -178,6 +185,15 @@ type feishuRequestFunc func(client *lark.Client, options ...larkcore.RequestOpti
 
 func (p *Platform) SetCardNavigationHandler(h core.CardNavigationHandler) {
 	p.cardNavHandler = h
+}
+
+// SetLifecycleHandler stores the engine's lifecycle handler so the Feishu
+// platform can report readiness/unavailability from its background goroutine.
+// This makes Platform implement core.AsyncRecoverablePlatform.
+func (p *Platform) SetLifecycleHandler(h core.PlatformLifecycleHandler) {
+	p.mu.Lock()
+	p.lifecycle = h
+	p.mu.Unlock()
 }
 
 func New(opts map[string]any) (core.Platform, error) {
@@ -213,12 +229,15 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	}
 	reactionEmoji, _ := opts["reaction_emoji"].(string)
 	if reactionEmoji == "" {
-		reactionEmoji = "OnIt"
+		reactionEmoji = "THINKING"
 	}
 	if v, ok := opts["reaction_emoji"].(string); ok && v == "none" {
 		reactionEmoji = ""
 	}
 	doneEmoji, _ := opts["done_emoji"].(string)
+		if doneEmoji == "" {
+			doneEmoji = "OK"
+		}
 	if doneEmoji == "none" {
 		doneEmoji = ""
 	}
@@ -481,6 +500,10 @@ func (p *Platform) shouldUseWebhookMode() bool {
 }
 
 // startWebSocketMode starts the WebSocket long connection mode.
+// The larkws SDK's Start() blocks forever on success (via select{})
+// and returns an error on failure. Since the WebSocket connection is
+// established asynchronously, this method reports readiness/unavailability
+// through the PlatformLifecycleHandler callbacks.
 func (p *Platform) startWebSocketMode() error {
 	wsOpts := []larkws.ClientOption{
 		larkws.WithEventHandler(p.eventHandler),
@@ -498,8 +521,108 @@ func (p *Platform) startWebSocketMode() error {
 	p.mu.Unlock()
 
 	go func() {
-		if err := p.wsClient.Start(ctx); err != nil {
-			slog.Error(p.tag()+": websocket error", "error", err)
+		// wsClient.Start() blocks forever on success (select{} after pingLoop).
+		// We wrap it so we can detect whether the connection was established
+		// or failed, and surface that to the engine lifecycle handler.
+		startDone := make(chan error, 1)
+		go func() {
+			startDone <- p.wsClient.Start(ctx)
+		}()
+
+		// If Start() returns quickly (within 15s), it means connection failed.
+		// If it doesn't return, the connection was established successfully.
+		// 15s is generous — the WebSocket handshake typically completes in < 5s,
+		// and the SDK's built-in reconnect loop can take minutes, so by this
+		// point we know the initial connect() succeeded and pingLoop is running.
+		timer := time.NewTimer(15 * time.Second)
+		defer timer.Stop()
+
+		select {
+		case err := <-startDone:
+			// Start() returned — connection failed or context was cancelled.
+			if err != nil {
+				slog.Error(p.tag()+": websocket error", "error", err)
+				p.mu.Lock()
+				p.wsErrMsg = err.Error()
+				p.mu.Unlock()
+				p.mu.RLock()
+				lifecycle := p.lifecycle
+				p.mu.RUnlock()
+				if lifecycle != nil {
+					lifecycle.OnPlatformUnavailable(p, err)
+				}
+			}
+			// nil error shouldn't happen (select{} blocks forever on success),
+			// but if it does (e.g., context cancelled during shutdown), no need
+			// to report — the engine is already stopping.
+
+		case <-timer.C:
+			// Start() hasn't returned — connection established.
+			slog.Info(p.tag()+": websocket connected")
+			p.mu.Lock()
+			p.wsReady = true
+			p.wsErrMsg = ""
+			p.mu.Unlock()
+			p.mu.RLock()
+			lifecycle := p.lifecycle
+			p.mu.RUnlock()
+			if lifecycle != nil {
+				lifecycle.OnPlatformReady(p)
+			}
+
+			// Also mark secondary platforms in the shared group as ready,
+			// since they depend on this primary's connection.
+			if p.sharedGroup != nil {
+				for _, sibling := range p.sharedGroup.allPlatforms() {
+					if sibling != p && !sibling.wsReady {
+						sibling.mu.Lock()
+						sibling.wsReady = true
+						sibling.wsErrMsg = ""
+						sibling.mu.Unlock()
+						sibling.mu.RLock()
+						sLifecycle := sibling.lifecycle
+						sibling.mu.RUnlock()
+						if sLifecycle != nil {
+							sLifecycle.OnPlatformReady(sibling)
+						}
+					}
+				}
+			}
+
+			// Wait for the WebSocket client to eventually finish.
+			// On success it blocks forever, so this only unblocks when
+			// context is cancelled (shutdown) or the connection drops
+			// and the SDK fails to reconnect.
+			if err := <-startDone; err != nil {
+				slog.Error(p.tag()+": websocket disconnected", "error", err)
+				p.mu.Lock()
+				p.wsReady = false
+				p.wsErrMsg = err.Error()
+				p.mu.Unlock()
+				p.mu.RLock()
+				lifecycle = p.lifecycle
+				p.mu.RUnlock()
+				if lifecycle != nil {
+					lifecycle.OnPlatformUnavailable(p, err)
+				}
+				// Also mark secondary platforms as unavailable.
+				if p.sharedGroup != nil {
+					for _, sibling := range p.sharedGroup.allPlatforms() {
+						if sibling != p && sibling.wsReady {
+							sibling.mu.Lock()
+							sibling.wsReady = false
+							sibling.wsErrMsg = err.Error()
+							sibling.mu.Unlock()
+							sibling.mu.RLock()
+							sLifecycle := sibling.lifecycle
+							sibling.mu.RUnlock()
+							if sLifecycle != nil {
+								sLifecycle.OnPlatformUnavailable(sibling, err)
+							}
+						}
+					}
+				}
+			}
 		}
 	}()
 
@@ -789,11 +912,11 @@ func (p *Platform) addReactionWithEmoji(messageID, emojiType string) string {
 				Build()).
 			Build())
 	if err != nil {
-		slog.Debug(p.tag()+": add reaction failed", "error", err)
+		slog.Warn(p.tag()+": add reaction failed", "error", err)
 		return ""
 	}
 	if !resp.Success() {
-		slog.Debug(p.tag()+": add reaction failed", "code", resp.Code, "msg", resp.Msg)
+		slog.Warn(p.tag()+": add reaction failed", "code", resp.Code, "msg", resp.Msg)
 		return ""
 	}
 	if resp.Data != nil && resp.Data.ReactionId != nil {
@@ -820,17 +943,16 @@ func (p *Platform) removeReaction(messageID, reactionID string) {
 	}
 }
 
-// StartTyping adds an emoji reaction to the user's message and returns a stop
-// function that removes the reaction when processing is complete.
+// StartTyping adds a "THINKING" emoji reaction to the user's message.
+// The reaction is NOT removed after processing completes so the user
+// can see that their message was handled.
 func (p *Platform) StartTyping(ctx context.Context, rctx any) (stop func()) {
 	rc, ok := rctx.(replyContext)
 	if !ok || rc.messageID == "" {
 		return func() {}
 	}
-	reactionID := p.addReaction(rc.messageID)
-	return func() {
-		go p.removeReaction(rc.messageID, reactionID)
-	}
+	p.addReaction(rc.messageID)
+	return func() {} // no removal — leave the reaction as a visual receipt
 }
 
 // AddDoneReaction adds a "done" emoji reaction so the user gets a push

@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    host: '0.0.0.0', // Listen on all interfaces so Wails IPv4 proxy can connect
   },
   envPrefix: ['VITE_', 'WAILS_'],
   build: {

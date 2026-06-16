@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { SegmentedControl } from '../components/SegmentedControl'
 import { FormField } from '../components/FormField'
 import { StatusDot } from '../components/StatusDot'
-
-// Placeholder Wails bindings - will be replaced by auto-generated ones
-const GetConfigSummary = async (): Promise<any> => { console.log('GetConfigSummary called'); return null }
-const GetFeishuConfigDetail = async (projectName: string): Promise<any> => { console.log('GetFeishuConfigDetail called', projectName); return null }
-const SaveFeishuConfig = async (opts: any): Promise<void> => { console.log('SaveFeishuConfig called', opts) }
-const ValidateFeishuCredentials = async (appId: string, appSecret: string, domain: string): Promise<void> => { console.log('ValidateFeishuCredentials called', appId, appSecret, domain) }
+import { App, ConfigSummary, FeishuPlatformDetail, SaveFeishuConfigOpts, ProjectInfo } from '../../bindings/github.com/chenhg5/cc-connect/client'
 
 interface FeishuConfigState {
   projectName: string
@@ -29,7 +24,6 @@ interface FeishuConfigState {
   port: string
   callbackPath: string
   encryptKey: string
-  // UI-only state
   connectionMode: 'websocket' | 'webhook'
 }
 
@@ -45,8 +39,8 @@ const defaultState: FeishuConfigState = {
   groupReplyAll: false,
   shareSession: false,
   threadIsolation: false,
-  reactionEmoji: 'OnIt',
-  doneEmoji: 'none',
+  reactionEmoji: 'THINKING',
+  doneEmoji: 'OK',
   progressStyle: 'legacy',
   enableCard: true,
   resolveMentions: false,
@@ -57,14 +51,21 @@ const defaultState: FeishuConfigState = {
 }
 
 export function FeishuConfig() {
-  const [projects, setProjects] = useState<any[]>([])
+  const [projects, setProjects] = useState<ProjectInfo[]>([])
   const [selectedProject, setSelectedProject] = useState('')
   const [config, setConfig] = useState<FeishuConfigState>(defaultState)
+  const [savedConfig, setSavedConfig] = useState<FeishuConfigState>(defaultState)
   const [validationState, setValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle')
   const [validationError, setValidationError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showValidationErrors, setShowValidationErrors] = useState(false)
+
+  // Dirty state: compare current config vs saved config
+  const isDirty = useMemo(() => {
+    return JSON.stringify(config) !== JSON.stringify(savedConfig)
+  }, [config, savedConfig])
 
   useEffect(() => {
     loadProjects()
@@ -76,14 +77,19 @@ export function FeishuConfig() {
     }
   }, [selectedProject])
 
+  // Reset validation state when credential fields change
+  useEffect(() => {
+    setValidationState('idle')
+    setValidationError('')
+  }, [config.appId, config.appSecret])
+
   const loadProjects = async () => {
     setLoading(true)
     try {
-      const summary = await GetConfigSummary()
+      const summary = await App.GetConfigSummary() as ConfigSummary | null
       if (summary && summary.projects) {
         setProjects(summary.projects)
-        // Auto-select first project with feishu
-        const feishuProjects = summary.projects.filter((p: any) => p.hasFeishu)
+        const feishuProjects = summary.projects.filter((p: ProjectInfo) => p.hasFeishu)
         if (feishuProjects.length > 0) {
           setSelectedProject(feishuProjects[0].name)
         } else if (summary.projects.length > 0) {
@@ -99,10 +105,10 @@ export function FeishuConfig() {
 
   const loadConfigDetail = async (projectName: string) => {
     try {
-      const detail = await GetFeishuConfigDetail(projectName)
+      const detail = await App.GetFeishuConfigDetail(projectName) as FeishuPlatformDetail | null
       if (detail) {
         const isWebhook = (detail.port && detail.port !== '') || (detail.encryptKey && detail.encryptKey !== '')
-        setConfig({
+        const state: FeishuConfigState = {
           projectName: detail.projectName || projectName,
           platformType: detail.platformType || 'feishu',
           appId: detail.appId || '',
@@ -123,7 +129,9 @@ export function FeishuConfig() {
           callbackPath: detail.callbackPath || '',
           encryptKey: detail.encryptKey || '',
           connectionMode: isWebhook ? 'webhook' : 'websocket',
-        })
+        }
+        setConfig(state)
+        setSavedConfig(state)
       }
     } catch (err) {
       console.error('Failed to load config detail:', err)
@@ -135,7 +143,7 @@ export function FeishuConfig() {
     setValidationError('')
     try {
       const domain = config.domain || (config.platformType === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn')
-      await ValidateFeishuCredentials(config.appId, config.appSecret, domain)
+      await App.ValidateFeishuCredentials(config.appId, config.appSecret, domain)
       setValidationState('valid')
     } catch (err: any) {
       setValidationState('invalid')
@@ -143,97 +151,61 @@ export function FeishuConfig() {
     }
   }
 
-  const handleSaveCredentials = async () => {
+  const buildSaveOpts = (): SaveFeishuConfigOpts => {
+    return new SaveFeishuConfigOpts({
+      projectName: config.projectName,
+      appId: config.appId,
+      appSecret: config.appSecret,
+      domain: config.domain,
+      allowFrom: config.allowFrom,
+      allowChat: config.allowChat,
+      groupOnly: config.groupOnly,
+      groupReplyAll: config.groupReplyAll,
+      shareSession: config.shareSession,
+      threadIsolation: config.threadIsolation,
+      reactionEmoji: config.reactionEmoji,
+      doneEmoji: config.doneEmoji,
+      progressStyle: config.progressStyle,
+      enableCard: config.enableCard,
+      resolveMentions: config.resolveMentions,
+      port: config.connectionMode === 'webhook' ? config.port : '',
+      callbackPath: config.connectionMode === 'webhook' ? config.callbackPath : '',
+      encryptKey: config.connectionMode === 'webhook' ? config.encryptKey : '',
+    })
+  }
+
+  const handleSave = async () => {
+    // Validate required fields before saving
+    setShowValidationErrors(true)
+    if (!config.appId.trim() || !config.appSecret.trim()) {
+      setSaveMessage({ type: 'error', text: 'App ID 和 App Secret 为必填项' })
+      return
+    }
+    if (config.connectionMode === 'webhook' && !config.port.trim()) {
+      setSaveMessage({ type: 'error', text: 'Webhook 模式需要指定端口' })
+      return
+    }
+
     setSaving(true)
-    setSaveError('')
+    setSaveMessage(null)
     try {
-      await SaveFeishuConfig({
-        projectName: config.projectName,
-        appId: config.appId,
-        appSecret: config.appSecret,
-        domain: config.domain,
-        allowFrom: config.allowFrom,
-        allowChat: config.allowChat,
-        groupOnly: config.groupOnly,
-        groupReplyAll: config.groupReplyAll,
-        shareSession: config.shareSession,
-        threadIsolation: config.threadIsolation,
-        reactionEmoji: config.reactionEmoji,
-        doneEmoji: config.doneEmoji,
-        progressStyle: config.progressStyle,
-        enableCard: config.enableCard,
-        resolveMentions: config.resolveMentions,
-        port: config.connectionMode === 'webhook' ? config.port : '',
-        callbackPath: config.connectionMode === 'webhook' ? config.callbackPath : '',
-        encryptKey: config.connectionMode === 'webhook' ? config.encryptKey : '',
-      })
+      await App.SaveFeishuConfig(buildSaveOpts())
+      setSavedConfig({ ...config }) // Update saved state to match current
+      setSaveMessage({ type: 'success', text: '配置已保存' })
+      setShowValidationErrors(false)
     } catch (err: any) {
-      setSaveError(err?.message || '保存失败')
+      setSaveMessage({ type: 'error', text: err?.message || '保存失败' })
     } finally {
       setSaving(false)
     }
   }
 
-  const handleSaveConnection = async () => {
-    setSaving(true)
-    setSaveError('')
-    try {
-      await SaveFeishuConfig({
-        projectName: config.projectName,
-        appId: config.appId,
-        appSecret: config.appSecret,
-        domain: config.domain,
-        allowFrom: config.allowFrom,
-        allowChat: config.allowChat,
-        groupOnly: config.groupOnly,
-        groupReplyAll: config.groupReplyAll,
-        shareSession: config.shareSession,
-        threadIsolation: config.threadIsolation,
-        reactionEmoji: config.reactionEmoji,
-        doneEmoji: config.doneEmoji,
-        progressStyle: config.progressStyle,
-        enableCard: config.enableCard,
-        resolveMentions: config.resolveMentions,
-        port: config.connectionMode === 'webhook' ? config.port : '',
-        callbackPath: config.connectionMode === 'webhook' ? config.callbackPath : '',
-        encryptKey: config.connectionMode === 'webhook' ? config.encryptKey : '',
-      })
-    } catch (err: any) {
-      setSaveError(err?.message || '保存失败')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSaveBehavior = async () => {
-    setSaving(true)
-    setSaveError('')
-    try {
-      await SaveFeishuConfig({
-        projectName: config.projectName,
-        appId: config.appId,
-        appSecret: config.appSecret,
-        domain: config.domain,
-        allowFrom: config.allowFrom,
-        allowChat: config.allowChat,
-        groupOnly: config.groupOnly,
-        groupReplyAll: config.groupReplyAll,
-        shareSession: config.shareSession,
-        threadIsolation: config.threadIsolation,
-        reactionEmoji: config.reactionEmoji,
-        doneEmoji: config.doneEmoji,
-        progressStyle: config.progressStyle,
-        enableCard: config.enableCard,
-        resolveMentions: config.resolveMentions,
-        port: config.connectionMode === 'webhook' ? config.port : '',
-        callbackPath: config.connectionMode === 'webhook' ? config.callbackPath : '',
-        encryptKey: config.connectionMode === 'webhook' ? config.encryptKey : '',
-      })
-    } catch (err: any) {
-      setSaveError(err?.message || '保存失败')
-    } finally {
-      setSaving(false)
-    }
+  const handleReset = async () => {
+    setConfig({ ...savedConfig })
+    setValidationState('idle')
+    setValidationError('')
+    setSaveMessage(null)
+    setShowValidationErrors(false)
   }
 
   if (loading) {
@@ -255,12 +227,43 @@ export function FeishuConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Project selector */}
-      {projects.length > 1 && (
-        <div className="bg-surface rounded-lg p-card">
-          <h3 className="text-headline text-primary mb-3">工作区</h3>
+      {/* Header: project selector + global actions */}
+      <div className="bg-surface rounded-lg p-card">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-title text-primary">飞书配置</h2>
+            {isDirty && (
+              <span className="text-caption text-warning bg-warning/10 px-2 py-0.5 rounded-sm">未保存</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              disabled={!isDirty || saving}
+              className="px-3 py-1.5 rounded-sm text-caption text-secondary border border-gray-200/50 disabled:opacity-50 transition-colors hover:text-primary"
+            >
+              重置
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !isDirty}
+              className="px-4 py-1.5 rounded-sm text-body bg-accent text-white disabled:opacity-50 transition-colors"
+            >
+              {saving ? '保存中...' : '保存配置'}
+            </button>
+          </div>
+        </div>
+        {saveMessage && (
+          <p className={`text-caption mt-2 ${saveMessage.type === 'success' ? 'text-success' : 'text-warning'}`}>
+            {saveMessage.text}
+          </p>
+        )}
+
+        {/* Project selector - always visible */}
+        <div className="mt-4 pt-3 border-t border-gray-200/50">
+          <h3 className="text-headline text-primary mb-2">项目</h3>
           <div className="space-y-1">
-            {projects.map((proj: any) => (
+            {projects.map((proj: ProjectInfo) => (
               <button
                 key={proj.name}
                 onClick={() => setSelectedProject(proj.name)}
@@ -280,9 +283,9 @@ export function FeishuConfig() {
             ))}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* 飞书凭证卡片 */}
+      {/* 飞书凭证 */}
       <div className="bg-surface rounded-lg p-card space-y-4">
         <h3 className="text-headline text-primary">飞书凭证</h3>
 
@@ -303,7 +306,7 @@ export function FeishuConfig() {
           value={config.appId}
           onChange={(v) => setConfig({ ...config, appId: v as string })}
           placeholder="cli_xxxxxxxx"
-          error={validationState === 'invalid' && !config.appId ? '请输入 App ID' : undefined}
+          error={showValidationErrors && !config.appId.trim() ? '请输入 App ID' : undefined}
         />
 
         <FormField
@@ -312,7 +315,7 @@ export function FeishuConfig() {
           value={config.appSecret}
           onChange={(v) => setConfig({ ...config, appSecret: v as string })}
           placeholder="飞书应用密钥"
-          error={validationState === 'invalid' && !config.appSecret ? '请输入 App Secret' : undefined}
+          error={showValidationErrors && !config.appSecret.trim() ? '请输入 App Secret' : undefined}
         />
 
         <FormField
@@ -334,35 +337,24 @@ export function FeishuConfig() {
           }
         />
 
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={handleValidateCredentials}
             disabled={!config.appId || !config.appSecret || validationState === 'validating'}
-            className="px-4 py-2 rounded-sm text-body bg-accent text-white disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 rounded-sm text-caption text-secondary border border-gray-200/50 disabled:opacity-50 transition-colors hover:text-primary"
           >
             {validationState === 'validating' ? '验证中...' : '验证凭证'}
           </button>
           {validationState === 'valid' && (
-            <span className="text-body text-success">验证成功</span>
+            <span className="text-caption text-success">✓ 验证成功</span>
           )}
           {validationState === 'invalid' && (
             <span className="text-caption text-warning">{validationError}</span>
           )}
         </div>
-
-        <div className="flex justify-end pt-2 border-t border-gray-200/50">
-          <button
-            onClick={handleSaveCredentials}
-            disabled={saving}
-            className="px-4 py-2 rounded-sm text-body bg-accent text-white disabled:opacity-50 transition-colors"
-          >
-            {saving ? '保存中...' : '保存凭证'}
-          </button>
-        </div>
-        {saveError && <p className="text-caption text-warning">{saveError}</p>}
       </div>
 
-      {/* 连接模式卡片 */}
+      {/* 连接模式 */}
       <div className="bg-surface rounded-lg p-card space-y-4">
         <h3 className="text-headline text-primary">连接模式</h3>
 
@@ -389,6 +381,7 @@ export function FeishuConfig() {
               value={config.port}
               onChange={(v) => setConfig({ ...config, port: v as string })}
               placeholder="8080"
+              error={showValidationErrors && config.connectionMode === 'webhook' && !config.port.trim() ? 'Webhook 需要指定端口' : undefined}
             />
             <FormField
               label="回调路径"
@@ -406,19 +399,9 @@ export function FeishuConfig() {
             />
           </div>
         )}
-
-        <div className="flex justify-end pt-2 border-t border-gray-200/50">
-          <button
-            onClick={handleSaveConnection}
-            disabled={saving}
-            className="px-4 py-2 rounded-sm text-body bg-accent text-white disabled:opacity-50 transition-colors"
-          >
-            {saving ? '保存中...' : '保存连接配置'}
-          </button>
-        </div>
       </div>
 
-      {/* 权限与行为卡片 */}
+      {/* 权限与行为 */}
       <div className="bg-surface rounded-lg p-card space-y-4">
         <h3 className="text-headline text-primary">权限与行为</h3>
 
@@ -478,10 +461,15 @@ export function FeishuConfig() {
             value={config.reactionEmoji}
             onChange={(v) => setConfig({ ...config, reactionEmoji: v as string })}
             options={[
-              { label: 'OnIt (默认)', value: 'OnIt' },
+              { label: '🤔 THINKING (默认)', value: 'THINKING' },
+              { label: '👍 THUMBSUP', value: 'THUMBSUP' },
+              { label: '❤️ HEART', value: 'HEART' },
+              { label: '👏 CLAP', value: 'CLAP' },
+              { label: '😂 LAUGH', value: 'LAUGH' },
+              { label: '🎉 PARTY', value: 'PARTY' },
+              { label: '👌 OK', value: 'OK' },
+              { label: '😢 CRY', value: 'CRY' },
               { label: 'None (无表情)', value: 'none' },
-              { label: 'ThumbUp', value: 'ThumbUp' },
-              { label: 'Clapping', value: 'Clapping' },
             ]}
           />
 
@@ -491,9 +479,15 @@ export function FeishuConfig() {
             value={config.doneEmoji}
             onChange={(v) => setConfig({ ...config, doneEmoji: v as string })}
             options={[
+              { label: '👌 OK (默认)', value: 'OK' },
+              { label: '👍 THUMBSUP', value: 'THUMBSUP' },
+              { label: '❤️ HEART', value: 'HEART' },
+              { label: '👏 CLAP', value: 'CLAP' },
+              { label: '🎉 PARTY', value: 'PARTY' },
+              { label: '😂 LAUGH', value: 'LAUGH' },
+              { label: '🤔 THINKING', value: 'THINKING' },
+              { label: '😢 CRY', value: 'CRY' },
               { label: 'None (无表情)', value: 'none' },
-              { label: 'Done', value: 'Done' },
-              { label: 'ThumbUp', value: 'ThumbUp' },
             ]}
           />
 
@@ -515,16 +509,6 @@ export function FeishuConfig() {
             value={config.enableCard}
             onChange={(v) => setConfig({ ...config, enableCard: v as boolean })}
           />
-        </div>
-
-        <div className="flex justify-end pt-2 border-t border-gray-200/50">
-          <button
-            onClick={handleSaveBehavior}
-            disabled={saving}
-            className="px-4 py-2 rounded-sm text-body bg-accent text-white disabled:opacity-50 transition-colors"
-          >
-            {saving ? '保存中...' : '保存行为配置'}
-          </button>
         </div>
       </div>
     </div>

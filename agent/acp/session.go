@@ -22,6 +22,9 @@ import (
 // roughly half the map (iteration order is arbitrary) to bound memory.
 const toolInputCacheMaxEntries = 1000
 
+// Compile-time check: acpSession satisfies core.Interrupter.
+var _ core.Interrupter = (*acpSession)(nil)
+
 type acpSession struct {
 	workDir string
 	events  chan core.Event
@@ -29,6 +32,7 @@ type acpSession struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	alive   atomic.Bool
+	closeOnce sync.Once // protects events channel from double-close
 
 	cmd *exec.Cmd
 	tr  *transport
@@ -53,6 +57,18 @@ type acpSession struct {
 	currentMode    string
 
 	callbacks sessionCallbacks // may be nil (tests, integration harness)
+
+	// parentCtx is the original context passed by the engine (e.ctx).
+	// It is NOT cancelled on Close/Interrupt — only the derived child
+	// (s.ctx) is. Storing it lets Interrupt() derive a fresh child
+	// context for the restarted process.
+	parentCtx context.Context
+
+	// startupCfg holds the config used to create this session so that
+	// Interrupt() can restart the process with the same command, args,
+	// env, etc. The resumeSessionID field is NOT reused — Interrupt()
+	// supplies the current ACP session ID instead.
+	startupCfg acpSessionConfig
 }
 
 type permState struct {
@@ -91,6 +107,8 @@ func newACPSession(ctx context.Context, cfg acpSessionConfig) (*acpSession, erro
 		toolInputByID: make(map[string]string),
 		acpSessID:     cfg.resumeSessionID,
 		callbacks:     cfg.callbacks,
+		parentCtx:     ctx,
+		startupCfg:    cfg,
 	}
 	s.alive.Store(true)
 
@@ -715,10 +733,182 @@ func (s *acpSession) Close() error {
 	}()
 	select {
 	case <-done:
-		close(s.events)
+		s.closeOnce.Do(func() { close(s.events) })
 	case <-time.After(8 * time.Second):
 		slog.Warn("acp: close timed out waiting for I/O loop")
 	}
+	return nil
+}
+
+// Interrupt kills the current ACP agent process, restarts it, and
+// resumes the session via session/load. This implements the
+// core.Interrupter interface: the current turn is cancelled but the
+// conversation context (session ID) is preserved, so the next user
+// message continues in the same conversation.
+//
+// If session/load fails or is not supported by the agent, the
+// handshake falls back to session/new (fresh session). This is still
+// preferable to a full Close() because the engine's interactive state
+// survives and the next message is delivered without needing a fresh
+// StartSession round.
+//
+// If the restart itself fails, Interrupt() returns an error and the
+// engine falls back to full termination (Close).
+func (s *acpSession) Interrupt() error {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+
+	if !s.alive.Load() {
+		return fmt.Errorf("acp: session not alive")
+	}
+
+	savedSessID := s.currentACPSessionID()
+	if savedSessID == "" {
+		return fmt.Errorf("acp: no session ID to resume after interrupt")
+	}
+
+	slog.Info("acp: interrupting session", "session_id", savedSessID)
+
+	// Kill the current process. Cancel the derived context first so the
+	// readLoop exits cleanly, then force-kill the process as a safeguard.
+	s.cancel()
+	if s.cmd != nil && s.cmd.Process != nil {
+		_ = s.cmd.Process.Kill()
+	}
+
+	// Wait for the I/O goroutine to finish so we can safely replace
+	// transport, cmd, and other fields.
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(8 * time.Second):
+		// Process didn't die in time — return error so engine
+		// falls back to full Close().
+		return fmt.Errorf("acp: interrupt: timed out waiting for process to die")
+	}
+
+	// Restart the process and resume the session.
+	if err := s.restart(savedSessID); err != nil {
+		return fmt.Errorf("acp: interrupt: %w", err)
+	}
+
+	// Emit a synthetic EventResult so the engine's event loop
+	// recognises the interrupted turn as complete.
+	s.emit(core.Event{
+		Type:      core.EventResult,
+		SessionID: s.currentACPSessionID(),
+		Done:      true,
+	})
+
+	slog.Info("acp: session resumed after interrupt", "session_id", s.currentACPSessionID())
+	return nil
+}
+
+// restart spawns a fresh ACP agent process and reconnects the
+// JSON-RPC transport, then handshakes with session/load (or session/new
+// as fallback) using the provided resume ID. The acpSession struct is
+// updated in-place so the engine's existing reference stays valid.
+func (s *acpSession) restart(resumeSessionID string) error {
+	cfg := s.startupCfg
+
+	sessionCtx, cancel := context.WithCancel(s.parentCtx)
+
+	cmd := exec.CommandContext(sessionCtx, cfg.command, cfg.args...)
+	cmd.Dir = s.workDir
+	cmd.Env = core.MergeEnv(os.Environ(), cfg.extraEnv)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return fmt.Errorf("stdin pipe: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return fmt.Errorf("stdout pipe: %w", err)
+	}
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(&stderrBuf, os.Stderr)
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return fmt.Errorf("start %s: %w", cfg.command, err)
+	}
+
+	tr := newTransport(stdout, stdin, s.onNotification, s.onServerRequest)
+
+	// Swap all process-dependent fields in one logical step.
+	// No other goroutine can touch these because:
+	//   - the old readLoop is dead (wg.Wait returned above);
+	//   - Send() is blocked on sendMu (held by Interrupt);
+	//   - RespondPermission only reads s.tr (now the new one).
+	s.cmd = cmd
+	s.tr = tr
+	s.ctx = sessionCtx
+	s.cancel = cancel
+	s.alive.Store(true)
+
+	// Clear stale permission state from the old process.
+	s.permMu.Lock()
+	s.permByID = make(map[string]permState)
+	s.permMu.Unlock()
+
+	// Clear stale tool input cache.
+	s.toolInputMu.Lock()
+	s.toolInputByID = make(map[string]string)
+	s.toolInputMu.Unlock()
+
+	// Start the readLoop goroutine for the new process.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.tr.readLoop(sessionCtx)
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			msg := stderrBuf.String()
+			if msg != "" {
+				slog.Error("acp: process exited", "error", waitErr, "stderr", msg)
+				s.emit(core.Event{Type: core.EventError, Error: fmt.Errorf("%s", strings.TrimSpace(msg))})
+			} else {
+				slog.Debug("acp: process exited", "error", waitErr)
+			}
+		}
+		s.alive.Store(false)
+	}()
+
+	// Handshake: initialize → authenticate → session/load or session/new.
+	// If session/load succeeds, we resume the same conversation.
+	// If it fails (or isn't supported), we get a fresh session — still
+	// usable, just without the old history.
+	if err := s.handshake(resumeSessionID, cfg.authMethod); err != nil {
+		// Handshake failed — the new process is unusable. Clean it up
+		// but do NOT close the events channel (the engine will call
+		// Close() as fallback and needs the channel for that).
+		slog.Error("acp: handshake failed after restart", "error", err)
+		s.alive.Store(false)
+		s.cancel()
+		if s.cmd != nil && s.cmd.Process != nil {
+			_ = s.cmd.Process.Kill()
+		}
+		// Wait for the new goroutine so Close() doesn't hang on wg.Wait.
+		s.wg.Wait()
+		return err
+	}
+
+	// Re-apply the agent's mode preference (if any).
+	if strings.TrimSpace(cfg.initialMode) != "" {
+		if ok := s.SetLiveMode(cfg.initialMode); !ok {
+			slog.Warn("acp: initial mode could not be applied after restart",
+				"mode", cfg.initialMode,
+				"session_id", s.currentACPSessionID(),
+			)
+		}
+	}
+
 	return nil
 }
 

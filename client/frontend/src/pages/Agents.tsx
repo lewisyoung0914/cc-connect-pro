@@ -1,38 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { StatusDot } from '../components/StatusDot'
-
-// Placeholder Wails bindings - will be replaced by auto-generated ones
-const ListSessions = async (): Promise<SessionInfo[]> => []
-const GetTaskQueue = async (_projectName: string): Promise<TaskInfo[]> => []
-const StopSession = async (_sessionKey: string): Promise<void> => {}
-const GetAgentStatus = async (): Promise<AgentStatusInfo[]> => []
-
-interface SessionInfo {
-  sessionKey: string
-  agentSessionId: string
-  agentType: string
-  projectName: string
-  platform: string
-  chatName: string
-  userName: string
-  status: string
-  createdAt: string
-  updatedAt: string
-  queueDepth: number
-}
-
-interface TaskInfo {
-  platform: string
-  userName: string
-  content: string
-  queueTime: string
-}
-
-interface AgentStatusInfo {
-  projectName: string
-  agentType: string
-  status: string
-}
+import { App, SessionInfo, TaskInfo, AgentStatusInfo } from '../../bindings/github.com/chenhg5/cc-connect/client'
 
 function relativeTime(dateStr: string): string {
   if (!dateStr) return ''
@@ -63,13 +31,13 @@ export function Agents() {
 
   const refresh = useCallback(async () => {
     try {
-      const sess = await ListSessions()
+      const sess = await App.ListSessions()
       setSessions(sess)
-      const statuses = await GetAgentStatus()
+      const statuses = await App.GetAgentStatus()
       setAgentStatuses(statuses)
       // If a session is selected, refresh its project's task queue
       if (selectedSession) {
-        const tasks = await GetTaskQueue(selectedSession.projectName)
+        const tasks = await App.GetTaskQueue(selectedSession.projectName)
         setSelectedProjectTasks(tasks)
       }
     } catch (err) {
@@ -86,7 +54,7 @@ export function Agents() {
   const handleSelectSession = async (session: SessionInfo) => {
     setSelectedSession(session)
     try {
-      const tasks = await GetTaskQueue(session.projectName)
+      const tasks = await App.GetTaskQueue(session.projectName)
       setSelectedProjectTasks(tasks)
     } catch (err) {
       console.error('Failed to load task queue:', err)
@@ -97,7 +65,7 @@ export function Agents() {
     if (!selectedSession) return
     setStopping(true)
     try {
-      await StopSession(selectedSession.sessionKey)
+      await App.StopSession(selectedSession.sessionKey)
       setShowStopConfirm(false)
       setSelectedSession(null)
       setSelectedProjectTasks([])

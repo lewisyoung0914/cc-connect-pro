@@ -7,13 +7,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/chenhg5/cc-connect/config"
 	"github.com/chenhg5/cc-connect/core"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/sys/windows/registry"
 )
 
 // Service manages the cc-connect engine lifecycle.
@@ -46,6 +50,11 @@ func (s *Service) Start() error {
 	s.status = StatusStarting
 	s.errMsg = ""
 	emitEvent("service:starting", nil)
+
+	// Inject environment variables needed by agents on Windows.
+	// Claude Code requires git-bash; if it's not in PATH, set the
+	// CLAUDE_CODE_GIT_BASH_PATH env var so the agent subprocess can find it.
+	injectAgentEnvVars()
 
 	cfgPath := resolveConfigPath(s.app.cfgPath)
 	if cfgPath == "" {
@@ -284,4 +293,70 @@ func projectStatePath(dataDir, projectName string) string {
 	)
 	safe := replacer.Replace(projectName)
 	return filepath.Join(dataDir, "project_state", safe+".json")
+}
+
+// injectAgentEnvVars sets environment variables required by agent subprocesses.
+// On Windows, Claude Code requires git-bash. If CLAUDE_CODE_GIT_BASH_PATH
+// is not already set, this function searches for bash.exe via PATH, well-known
+// directories, and the Windows Registry (GitForWindows InstallPath key).
+func injectAgentEnvVars() {
+	if os.Getenv("CLAUDE_CODE_GIT_BASH_PATH") != "" {
+		slog.Info("agent env var already set", "key", "CLAUDE_CODE_GIT_BASH_PATH", "value", os.Getenv("CLAUDE_CODE_GIT_BASH_PATH"))
+		return
+	}
+	if runtime.GOOS != "windows" {
+		return
+	}
+
+	bashPath := findGitBash()
+	if bashPath != "" {
+		os.Setenv("CLAUDE_CODE_GIT_BASH_PATH", bashPath)
+		slog.Info("injected agent env var", "key", "CLAUDE_CODE_GIT_BASH_PATH", "value", bashPath)
+	} else {
+		slog.Warn("could not find git-bash; Claude Code agent will fail on Windows")
+	}
+}
+
+func findGitBash() string {
+	// Strategy 1: PATH lookup → derive bash.exe from git.exe location.
+	if gitPath, err := exec.LookPath("git.exe"); err == nil {
+		gitDir := filepath.Dir(filepath.Dir(gitPath))
+		candidate := filepath.Join(gitDir, "bin", "bash.exe")
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+
+	// Strategy 2: Windows Registry — Git for Windows writes InstallPath.
+	if installPath := readRegString(registry.LOCAL_MACHINE, "SOFTWARE\\GitForWindows", "InstallPath"); installPath != "" {
+		candidate := filepath.Join(installPath, "bin", "bash.exe")
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+
+	// Strategy 3: well-known install directories.
+	for _, p := range []string{
+		"C:\\Program Files\\Git\\bin\\bash.exe",
+		"C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+	} {
+		if fileExists(p) {
+			return p
+		}
+	}
+
+	return ""
+}
+
+func readRegString(k registry.Key, path, name string) string {
+	key, err := registry.OpenKey(k, path, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer key.Close()
+	val, _, err := key.GetStringValue(name)
+	if err != nil {
+		return ""
+	}
+	return val
 }

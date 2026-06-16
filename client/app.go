@@ -45,62 +45,22 @@ type ProjectInfo struct {
 
 // App is the Wails binding struct exposed to the frontend.
 type App struct {
-	ctx        context.Context
-	service    *Service
-	status     ServiceStatus
-	cfg        *config.Config
-	cfgPath    string
-	tray       *application.SystemTray
-	trayMenu   *application.Menu
-	statusItem *application.MenuItem
-	window     *application.WebviewWindow
-	logBuffer  *LogRingBuffer
+	ctx              context.Context
+	service          *Service
+	status           ServiceStatus
+	cfg              *config.Config
+	cfgPath          string
+	tray             *application.SystemTray
+	trayMenu         *application.Menu
+	statusItem       *application.MenuItem
+	window           *application.WebviewWindow
+	logBuffer        *LogRingBuffer
+	logCaptureSetup  bool // lazily installed on first GetRecentLogs call
 }
 
-// ServiceStartup is the Wails lifecycle callback invoked when the application starts.
-// It implements the application.ServiceStartup interface.
-func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+// SetContext stores the Wails runtime context on the App.
+func (a *App) SetContext(ctx context.Context) {
 	a.ctx = ctx
-	a.status = StatusIdle
-	a.service = NewService(a)
-
-	// Set up log capture ring buffer (capacity 500)
-	a.logBuffer = NewLogRingBuffer(500)
-	setupLogCapture(a.logBuffer)
-
-	// Listen for service status events to update the tray
-	application.Get().Event.On("service:starting", func(event *application.CustomEvent) {
-		a.status = StatusStarting
-		if a.tray != nil && a.trayMenu != nil {
-			updateTrayStatus(a.tray, a.trayMenu, a.status)
-		}
-	})
-	application.Get().Event.On("service:running", func(event *application.CustomEvent) {
-		a.status = StatusRunning
-		if a.tray != nil && a.trayMenu != nil {
-			updateTrayStatus(a.tray, a.trayMenu, a.status)
-		}
-	})
-	application.Get().Event.On("service:stopping", func(event *application.CustomEvent) {
-		a.status = StatusStopping
-		if a.tray != nil && a.trayMenu != nil {
-			updateTrayStatus(a.tray, a.trayMenu, a.status)
-		}
-	})
-	application.Get().Event.On("service:idle", func(event *application.CustomEvent) {
-		a.status = StatusIdle
-		if a.tray != nil && a.trayMenu != nil {
-			updateTrayStatus(a.tray, a.trayMenu, a.status)
-		}
-	})
-	application.Get().Event.On("service:error", func(event *application.CustomEvent) {
-		a.status = StatusError
-		if a.tray != nil && a.trayMenu != nil {
-			updateTrayStatus(a.tray, a.trayMenu, a.status)
-		}
-	})
-
-	return nil
 }
 
 // Shutdown performs a graceful shutdown of the service.
@@ -109,6 +69,16 @@ func (a *App) Shutdown() error {
 		return a.service.Stop()
 	}
 	return nil
+}
+
+// QuitApp shuts down the service and quits the entire application.
+// Unlike Shutdown() which only stops the engine, this also terminates
+// the Wails process — used by the frontend exit button as a reliable
+// alternative to the tray menu quit (which may not fire OnClick on
+// Windows due to a Wails v3 alpha bug).
+func (a *App) QuitApp() {
+	_ = a.Shutdown()
+	application.Get().Quit()
 }
 
 // GetServiceStatus returns the current service status.
@@ -227,37 +197,44 @@ func (a *App) CreateProjectWithFeishu(opts CreateProjectWithFeishuOpts) error {
 	return nil
 }
 
-// StartService starts the cc-connect engine service.
+// StartService starts the cc-connect engine service asynchronously.
+// The actual startup runs in a goroutine so the UI doesn't freeze during
+// slow engine initialization. Status transitions happen via Wails events
+// (service:starting → service:running or service:error), which the frontend
+// already listens for via useServiceStatus().
 func (a *App) StartService() error {
-	err := a.service.Start()
-	if err != nil {
-		a.status = StatusError
-	} else {
-		a.status = StatusRunning
+	if a.service == nil {
+		return fmt.Errorf("服务未初始化")
 	}
-	return err
+	go func() {
+		_ = a.service.Start()
+	}()
+	return nil
 }
 
-// StopService stops the cc-connect engine service.
+// StopService stops the cc-connect engine service asynchronously.
+// Engine.Stop() can block (e.g., waiting for WebSocket close handshake),
+// so we run it in a goroutine to prevent the UI from freezing in "stopping"
+// state. Status transitions happen via events (service:stopping → service:idle).
 func (a *App) StopService() error {
-	err := a.service.Stop()
-	if err != nil {
-		a.status = StatusError
-	} else {
-		a.status = StatusIdle
+	if a.service == nil {
+		return nil
 	}
-	return err
+	go func() {
+		_ = a.service.Stop()
+	}()
+	return nil
 }
 
-// RestartService restarts the cc-connect engine service.
+// RestartService restarts the cc-connect engine service asynchronously.
 func (a *App) RestartService() error {
-	err := a.service.Restart()
-	if err != nil {
-		a.status = StatusError
-	} else {
-		a.status = StatusRunning
+	if a.service == nil {
+		return nil
 	}
-	return err
+	go func() {
+		_ = a.service.Restart()
+	}()
+	return nil
 }
 
 // resolveConfigPath determines which config file to use.
@@ -748,10 +725,18 @@ func (a *App) GetPlatformHealth() []PlatformHealth {
 	return all
 }
 
-// GetRecentLogs returns the last N captured log entries
+// GetRecentLogs returns the last N captured log entries.
+// Log capture is lazily installed on the first call to avoid interfering
+// with Wails v3's internal slog pipeline during window creation —
+// replacing slog.Default() before the WebView2 window is fully initialized
+// causes the window to silently fail to appear on Windows 11 (alpha.98).
 func (a *App) GetRecentLogs(count int) []LogEntry {
 	if a.logBuffer == nil {
 		return []LogEntry{}
+	}
+	if !a.logCaptureSetup {
+		a.logCaptureSetup = true
+		setupLogCapture(a.logBuffer)
 	}
 	return a.logBuffer.Recent(count)
 }

@@ -142,4 +142,14 @@ Desktop.ini
 secrets/
 credentials/
 
+# Wails task runner cache (filename too long for git)
+client/.task/
+
+# Wails test scaffold
+_test_wails/
+
+# Wails generated bindings
+client/frontend/bindings/
+client/frontend/src/bindings.d.ts
+
 .codex

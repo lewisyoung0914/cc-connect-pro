@@ -44,7 +44,11 @@ func (p *interactivePlatform) SendCard(ctx context.Context, rctx any, card *core
 		return fmt.Errorf("%s: chatID is empty, cannot send card", p.tag())
 	}
 
-	if !p.noReplyToTrigger && p.shouldReplyInThread(rc) {
+	// Prefer Reply API when available so the card visually references the
+	// user's original message, consistent with SendPreviewStart / Send /
+	// sendMediaMessage. ReplyCard internally degrades to createMessage when
+	// shouldUseThreadOrReplyAPI is false, so this covers all cases.
+	if p.shouldUseThreadOrReplyAPI(rc) {
 		return p.ReplyCard(ctx, rctx, card)
 	}
 

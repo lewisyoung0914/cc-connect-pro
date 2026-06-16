@@ -7,7 +7,16 @@
       "PowerShell(& \"E:\\\\go\\\\bin\\\\go.exe\" version)",
       "PowerShell(cd \"E:\\\\project\\\\cc-connect-pro\"; New-Item -ItemType Directory -Path dist -Force | Out-Null; $commit = git rev-parse --short HEAD; $buildTime = \"2026-06-03T06:30:00Z\"; $platforms = @\\(\"linux/amd64\", \"linux/arm64\", \"darwin/amd64\", \"darwin/arm64\", \"windows/amd64\", \"windows/arm64\"\\); foreach \\($p in $platforms\\) { $goos = \\($p -split \"/\"\\)[0]; $goarch = \\($p -split \"/\"\\)[1]; $ext = if \\($goos -eq \"windows\"\\) { \".exe\" } else { \"\" }; $out = \"dist/cc-connect-v1.0.0-beta.2-$goos-$goarch$ext\"; Write-Host \"Building $out ...\"; $env:GOOS = $goos; $env:GOARCH = $goarch; $env:CGO_ENABLED = \"0\"; go build -ldflags \"-s -w -X main.version=v1.0.0-beta.2 -X main.commit=$commit -X main.buildTime=$buildTime\" -o $out ./cmd/cc-connect; if \\($LASTEXITCODE -ne 0\\) { Write-Host \"FAILED: $out\"; break }; $env:GOOS = \"\"; $env:GOARCH = \"\"; $env:CGO_ENABLED = \"\" }; Write-Host \"Done.\")",
       "PowerShell(Get-Command go -ErrorAction SilentlyContinue)",
-      "PowerShell($env:PATH)"
+      "PowerShell($env:PATH)",
+      "PowerShell(Get-Command wails -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command wails3 -ErrorAction SilentlyContinue)",
+      "PowerShell(go version)",
+      "PowerShell($env:Path = \"E:\\\\go\\\\bin;C:\\\\Users\\\\yangdongming\\\\go\\\\bin;\" + $env:Path; wails3 version)",
+      "PowerShell(Get-Process cc-connect -ErrorAction SilentlyContinue)",
+      "PowerShell($env:GOROOT)",
+      "PowerShell($env:GOPATH)",
+      "PowerShell(cd \"e:\\\\project\\\\cc-connect-pro\\\\client\"; $env:PATH = \"$env:USERPROFILE\\\\go\\\\bin;$env:GOROOT\\\\bin;$env:PATH\"; wails3 generate bindings 2>&1)",
+      "PowerShell(go build ./platform/feishu/)"
     ]
   }
 }
