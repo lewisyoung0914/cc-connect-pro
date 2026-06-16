@@ -1003,8 +1003,19 @@ func (cs *copilotSession) Close() error {
 
 	cs.cancel()
 	_ = forceKillCmd(cs.cmd)
-	<-cs.done
-	return nil
+
+	// Wait for the process to actually exit, but cap at 5s. On Windows
+	// taskkill /F /T can fail, or on Linux a process in D-state survives
+	// SIGKILL. Without a timeout, Close() could block forever, cascading
+	// to Engine.Stop() → Service.Stop() → UI stuck at "stopping".
+	select {
+	case <-cs.done:
+		slog.Info("copilotSession: exited after SIGKILL")
+		return nil
+	case <-time.After(5 * time.Second):
+		slog.Error("copilotSession: process did not exit after SIGKILL within 5s, abandoning session")
+		return fmt.Errorf("copilot session process did not exit after SIGKILL")
+	}
 }
 
 // saveImagesToTempDir saves image attachments to a temp directory under workDir

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chenhg5/cc-connect/config"
 	"github.com/chenhg5/cc-connect/core"
@@ -122,6 +123,9 @@ func (s *Service) Start() error {
 }
 
 // Stop stops all engines, cancels the context, and resets state.
+// A 150s overall timeout ensures the service:idle event is always emitted,
+// even if an engine.Stop() or agentSession.Close() hangs. Without this
+// cap, the desktop client UI would stay stuck at "stopping" forever.
 func (s *Service) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -133,10 +137,26 @@ func (s *Service) Stop() error {
 	s.status = StatusStopping
 	emitEvent("service:stopping", nil)
 
-	for _, e := range s.engines {
-		if err := e.Stop(); err != nil {
-			slog.Warn("engine stop error", "error", err)
+	// Overall timeout — covers the 130s closeAgentSessionWithTimeout per
+	// session plus a small buffer. If any engine hangs beyond this, we
+	// force-reset state so the UI can recover.
+	const stopTimeout = 150 * time.Second
+	done := make(chan struct{})
+	go func() {
+		for _, e := range s.engines {
+			if err := e.Stop(); err != nil {
+				slog.Warn("engine stop error", "error", err)
+			}
 		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All engines stopped cleanly.
+	case <-time.After(stopTimeout):
+		slog.Error("service stop timed out, forcing state reset",
+			"timeout", stopTimeout)
 	}
 
 	if s.cancel != nil {

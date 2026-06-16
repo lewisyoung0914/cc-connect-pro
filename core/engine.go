@@ -1642,7 +1642,7 @@ func (e *Engine) Stop() error {
 	for key, state := range states {
 		if state.agentSession != nil {
 			slog.Debug("engine.Stop: closing agent session", "session", key)
-			state.agentSession.Close()
+			e.closeAgentSessionWithTimeout(key, state.agentSession)
 		}
 	}
 

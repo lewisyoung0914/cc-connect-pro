@@ -18,6 +18,12 @@ import (
 // tree. Without this, cc-connect can only signal the direct child,
 // leaving grandchildren (such as MCP server bridges) as orphans.
 //
+// CREATE_NO_WINDOW suppresses the console window that Windows would
+// otherwise create for a console-mode child process spawned from a GUI
+// parent (e.g. the Wails desktop client). cc-connect communicates with
+// the CLI exclusively through stdin/stdout pipes, so the user should
+// never see or interact with the CLI window.
+//
 // Mirrors the pattern used by agent/codex/proc_windows.go.
 func prepareCmdForKill(cmd *exec.Cmd) {
 	if cmd == nil {
@@ -26,7 +32,7 @@ func prepareCmdForKill(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	cmd.SysProcAttr.CreationFlags |= syscall.CREATE_NEW_PROCESS_GROUP
+	cmd.SysProcAttr.CreationFlags |= syscall.CREATE_NEW_PROCESS_GROUP | 0x08000000 // CREATE_NO_WINDOW
 }
 
 // signalProcessGroup is a graceful best-effort equivalent of forceKillCmd

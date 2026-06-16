@@ -766,8 +766,20 @@ func (cs *claudeSession) Close() error {
 	if err := forceKillCmd(cs.cmd); err != nil {
 		slog.Warn("claudeSession: force kill", "error", err)
 	}
-	<-cs.done
-	return nil
+
+	// Wait for the process to actually exit, but cap at 5s. On Windows a
+	// process stuck in a kernel wait state may survive even SIGKILL, and
+	// the readLoop goroutine won't close cs.done until the OS reaps the
+	// process. Without a timeout here, Close() could block forever,
+	// causing Engine.Stop() → Service.Stop() → UI to hang in "stopping".
+	select {
+	case <-cs.done:
+		slog.Info("claudeSession: exited after SIGKILL")
+		return nil
+	case <-time.After(5 * time.Second):
+		slog.Error("claudeSession: process did not exit after SIGKILL within 5s, abandoning session")
+		return fmt.Errorf("claude session process did not exit after SIGKILL")
+	}
 }
 
 // shellJoinArgs joins args into a single string, quoting any arg that
